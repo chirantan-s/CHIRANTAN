@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { 
   Upload, 
@@ -191,7 +191,7 @@ const exportRegistryToCSV = (results: AnalysisResult[]) => {
 
 // --- Sub-Components ---
 
-const ProductImageViewer: React.FC<{ result: AnalysisResult }> = ({ result }) => {
+const ProductImageViewer: React.FC<{ result: AnalysisResult }> = React.memo(({ result }) => {
   const [productImgError, setProductImgError] = useState(false);
   const [logoImgError, setLogoImgError] = useState(false);
   
@@ -262,9 +262,9 @@ const ProductImageViewer: React.FC<{ result: AnalysisResult }> = ({ result }) =>
        )}
     </div>
   );
-};
+});
 
-const AttributeCard: React.FC<{ attr: ProductAttribute }> = ({ attr }) => {
+const AttributeCard: React.FC<{ attr: ProductAttribute }> = React.memo(({ attr }) => {
   const [copied, setCopied] = useState(false);
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -293,129 +293,71 @@ const AttributeCard: React.FC<{ attr: ProductAttribute }> = ({ attr }) => {
       <p className="text-[12px] font-bold text-slate-950 leading-tight break-words" title={attr.value}>{attr.value}</p>
     </div>
   );
-};
+});
 
-const Onboarding: React.FC<{ onComplete: (profile: UserProfile) => void }> = ({ onComplete }) => {
-  const [step, setStep] = useState<'email' | 'details'>('email');
-  const [formData, setFormData] = useState({ name: '', email: '', team: '', password: '', customTeam: '' });
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [error, setError] = useState('');
+const Onboarding: React.FC<{ initialEmail?: string, onComplete: (profile: UserProfile) => void }> = ({ initialEmail = '', onComplete }) => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState(initialEmail);
+  const [team, setTeam] = useState('Product');
+  const [customTeam, setCustomTeam] = useState('');
+  const [password, setPassword] = useState('');
 
-  const teams = ["Product", "Master Data Management", "Category", "Market Insight", "Others"];
+  const teams = ["Product", "Category", "Master Data Management", "Others"];
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.email.endsWith('@phonepe.com')) {
-      setError('Identity verification failed: Use @phonepe.com address');
-      return;
-    }
-    setIsVerifying(true);
-    setTimeout(() => {
+    if (name && email && password) {
+      const finalTeam = team === 'Others' ? customTeam : team;
+      const profile = { name, email, team: finalTeam, password, hasSeenTour: false };
+      
+      // Save to registry
       const savedRegistry = JSON.parse(localStorage.getItem('catalist_user_registry') || '{}');
-      if (savedRegistry[formData.email]) {
-        if (formData.password && savedRegistry[formData.email].password === formData.password) {
-          onComplete(savedRegistry[formData.email]);
-        } else if (!formData.password) {
-          setError('User found. Please enter your password.');
-        } else {
-          setError('Incorrect password for this account.');
-        }
-      } else {
-        setStep('details');
-      }
-      setIsVerifying(false);
-    }, 800);
-  };
-
-  const handleDetailsSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const finalTeam = formData.team === 'Others' ? formData.customTeam : formData.team;
-    if (!formData.name.trim() || !finalTeam || !formData.password) {
-      setError('All fields including password are required');
-      return;
+      savedRegistry[email.toLowerCase()] = profile;
+      localStorage.setItem('catalist_user_registry', JSON.stringify(savedRegistry));
+      
+      onComplete(profile);
     }
-    const profile: UserProfile = { 
-      name: formData.name, 
-      email: formData.email, 
-      team: finalTeam, 
-      password: formData.password, 
-      hasSeenTour: false 
-    };
-    const savedRegistry = JSON.parse(localStorage.getItem('catalist_user_registry') || '{}');
-    savedRegistry[formData.email] = profile;
-    localStorage.setItem('catalist_user_registry', JSON.stringify(savedRegistry));
-    onComplete(profile);
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-6 antialiased">
-      <div className="max-w-md w-full bg-white rounded-[2rem] shadow-2xl p-8 lg:p-10 space-y-8 animate-in fade-in zoom-in-95 duration-500 border border-stone-200">
-        <div className="text-center space-y-3">
-          <div className="w-16 h-16 bg-slate-950 rounded-2xl flex items-center justify-center text-white mx-auto shadow-xl shadow-stone-200 ring-4 ring-white">
-            <SearchCode size={32} className="text-amber-500" />
+    <div className="fixed inset-0 z-[200] bg-stone-50 flex items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-3xl border border-stone-200 shadow-2xl max-w-md w-full space-y-8 animate-in fade-in zoom-in-95 duration-500">
+        <div className="text-center space-y-2">
+          <div className="w-12 h-12 bg-slate-950 rounded-xl flex items-center justify-center text-white mx-auto shadow-xl shadow-stone-100">
+            <SearchCode size={24} className="text-amber-500" />
           </div>
-          <div>
-            <h1 className="text-2xl font-black tracking-tighter text-slate-950 uppercase">Catalist <span className="text-amber-600 text-xs align-top font-bold">PRO</span></h1>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] mt-1">Enterprise SSO Gate</p>
-          </div>
+          <h2 className="text-2xl font-black text-slate-950 tracking-tighter uppercase">Initialize Cata<span className="text-amber-600">list</span> Profile</h2>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest leading-none">Complete your technical authorization</p>
         </div>
-        {step === 'email' ? (
-          <form onSubmit={handleEmailSubmit} className="space-y-5">
-            <div className="space-y-4">
-              <div className="relative">
-                <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input 
-                  type="email" 
-                  required 
-                  placeholder="Corporate Email" 
-                  className="w-full bg-stone-50 border-2 border-stone-100 rounded-xl pl-11 pr-5 py-3.5 text-sm font-bold text-slate-950 focus:ring-4 focus:ring-stone-200/50 focus:border-slate-950 outline-none transition-all" 
-                  value={formData.email} 
-                  onChange={e => setFormData({...formData, email: e.target.value.toLowerCase()})} 
-                />
-              </div>
-              <div className="relative">
-                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input 
-                  type="password" 
-                  required 
-                  placeholder="Access Password" 
-                  className="w-full bg-stone-50 border-2 border-stone-100 rounded-xl pl-11 pr-5 py-3.5 text-sm font-bold text-slate-950 focus:ring-4 focus:ring-stone-200/50 focus:border-slate-950 outline-none transition-all" 
-                  value={formData.password} 
-                  onChange={e => setFormData({...formData, password: e.target.value})} 
-                />
-              </div>
-            </div>
-            {error && <div className="p-3.5 bg-red-50 rounded-xl border border-red-100 text-[13px] font-bold flex items-center gap-2.5 text-red-600"><AlertCircle size={18} />{error}</div>}
-            <button type="submit" disabled={isVerifying} className="w-full py-3.5 bg-slate-950 text-white rounded-xl font-black text-sm uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2.5">
-              {isVerifying ? <div className="loader w-5 h-5 border-2 border-white/20 border-t-white rounded-full"></div> : <>Authenticate Access <ArrowRight size={18} /></>}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleDetailsSubmit} className="space-y-5">
-            <div className="p-3.5 bg-stone-100/50 rounded-xl border border-stone-200 flex items-center gap-3">
-               <div className="w-10 h-10 rounded-full bg-slate-950 text-white flex items-center justify-center font-black text-sm shadow-md border border-amber-600/30">{formData.email.charAt(0).toUpperCase()}</div>
-               <p className="text-sm font-black text-slate-900 truncate">{formData.email}</p>
-            </div>
-            <input 
-              type="text" 
-              required 
-              placeholder="Full Name" 
-              className="w-full bg-stone-50 border-2 border-stone-100 rounded-xl px-5 py-3.5 text-sm font-bold text-slate-950 outline-none focus:border-amber-600 transition-all" 
-              value={formData.name} 
-              onChange={e => setFormData({...formData, name: e.target.value})} 
-            />
-            <select 
-              required 
-              className="w-full bg-stone-50 border-2 border-stone-100 rounded-xl px-5 py-3.5 text-sm font-bold text-slate-950 outline-none appearance-none focus:border-amber-600 transition-all" 
-              value={formData.team} 
-              onChange={e => setFormData({...formData, team: e.target.value})}
-            >
-              <option value="">Select Department</option>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+            <input required type="text" placeholder="SKU Analyst 01" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-950 outline-none focus:border-amber-600 shadow-inner" value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Corporate Email</label>
+            <input required type="email" placeholder="email@domain.com" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-950 outline-none focus:border-amber-600 shadow-inner" value={email} onChange={e => setEmail(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assigned Domain</label>
+            <select className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-950 outline-none focus:border-amber-600 shadow-inner" value={team} onChange={e => setTeam(e.target.value)}>
               {teams.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <button type="submit" className="w-full py-3.5 bg-slate-950 text-white rounded-xl font-black text-sm uppercase tracking-widest hover:bg-black transition-all shadow-xl">Complete Registration</button>
-          </form>
-        )}
+          </div>
+          {team === 'Others' && (
+            <div className="space-y-1 animate-in slide-in-from-top-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Specify Team Name</label>
+              <input required type="text" placeholder="Global Logistics..." className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-950 outline-none focus:border-amber-600 shadow-inner" value={customTeam} onChange={e => setCustomTeam(e.target.value)} />
+            </div>
+          )}
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Authentication Key (Password)</label>
+            <input required type="password" placeholder="••••••••" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-950 outline-none focus:border-amber-600 shadow-inner" value={password} onChange={e => setPassword(e.target.value)} />
+          </div>
+          <button type="submit" className="w-full py-4 bg-slate-950 text-white rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-stone-200 hover:bg-black transition-all active:scale-[0.98]">
+            Finalize Profile
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -423,113 +365,171 @@ const Onboarding: React.FC<{ onComplete: (profile: UserProfile) => void }> = ({ 
 
 const QuickTour: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const [step, setStep] = useState(0);
-  const slides = [
-    { title: "Intelligent Extraction", description: "Convert packshots, PDP links, or hybrid batch lists into granular, structured catalogue assets in seconds.", icon: Sparkles, color: "text-amber-600" },
-    { title: "Standardized Audit", description: "Review AI-generated data across 10 mission-critical categories including Technical, Legal, and SEO compliance.", icon: Target, color: "text-slate-900" },
-    { title: "Refinement Dialogue", description: "Use the subtle side-panel chat to deep-dive into micro-attributes or adjust product notions in real-time.", icon: MessageSquare, color: "text-emerald-700" }
+  const steps = [
+    { title: "Ingest Hub", description: "Upload images, SKU URLs, or CSV files to start a forensic audit.", icon: Plus },
+    { title: "Audit Space", description: "Review extracted metadata with 95%+ fidelity across 10 specialized domains.", icon: Target },
+    { title: "Master Registry", description: "Your central repository for all SKU technical DNA and SEO assets.", icon: Database }
   ];
 
   return (
-    <div className="fixed inset-0 z-[200] bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-300">
-      <div className="bg-white rounded-[2.5rem] w-full max-w-xl p-10 lg:p-12 text-center shadow-2xl border border-stone-200">
-        <div className="space-y-8">
-          <div className={`w-20 h-20 lg:w-24 lg:h-24 mx-auto rounded-3xl bg-stone-50 flex items-center justify-center border-2 border-stone-100 ${slides[step].color} shadow-inner`}>
-            {React.createElement(slides[step].icon, { size: 48 })}
-          </div>
-          <div className="space-y-3">
-            <h3 className="text-2xl lg:text-3xl font-black text-slate-950 tracking-tighter uppercase">{slides[step].title}</h3>
-            <p className="text-slate-500 font-medium text-base lg:text-lg leading-relaxed max-w-lg mx-auto">{slides[step].description}</p>
-          </div>
-          <div className="flex items-center gap-4 pt-4">
-            {step < slides.length - 1 ? (
-              <button onClick={() => setStep(step + 1)} className="flex-1 py-4 bg-slate-950 text-white rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2.5 shadow-lg shadow-stone-200 transition-all hover:bg-black">Continue <ArrowRight size={20} /></button>
-            ) : (
-              <button onClick={onComplete} className="w-full py-4 bg-slate-950 text-white rounded-xl font-black text-sm uppercase tracking-widest shadow-2xl transition-all hover:bg-black">Get Started</button>
-            )}
-          </div>
+    <div className="fixed inset-0 z-[300] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+      <div className="bg-white p-8 rounded-[2.5rem] max-w-md w-full space-y-6 text-center shadow-2xl border border-white/20 animate-in slide-in-from-bottom-8 duration-500">
+        <div className="w-16 h-16 bg-stone-50 text-slate-950 rounded-2xl flex items-center justify-center mx-auto shadow-xl border border-stone-100">
+          {React.createElement(steps[step].icon, { size: 32, className: "text-amber-500" })}
         </div>
-      </div>
-    </div>
-  );
-};
-
-const AboutPage: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
-  return (
-    <div className="min-h-screen bg-stone-50 p-8 lg:p-16 flex flex-col items-center justify-center antialiased overflow-y-auto">
-      <div className="max-w-5xl w-full space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-        <div className="text-center space-y-6">
-          <div className="w-24 h-24 bg-slate-950 rounded-[2rem] flex items-center justify-center text-white mx-auto shadow-2xl shadow-stone-200 ring-8 ring-white">
-            <SearchCode size={48} className="text-amber-500" />
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-5xl lg:text-7xl font-black text-slate-950 tracking-tighter uppercase leading-none">Catalist <span className="text-amber-600">PRO</span></h1>
-            <p className="text-slate-400 font-bold uppercase tracking-[0.3em] text-sm lg:text-lg">The Forensic Product Intelligence Matrix</p>
-          </div>
+        <div className="space-y-2">
+          <h3 className="text-xl font-black text-slate-950 uppercase tracking-tighter leading-none">{steps[step].title}</h3>
+          <p className="text-slate-500 text-sm font-medium leading-relaxed">{steps[step].description}</p>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {[
-            { 
-              title: "Deep Forensic Extraction", 
-              desc: "Recursive attribute decomposition powered by Gemini models to extract granular technical specs from packshots and PDP signals.", 
-              icon: Zap, 
-              color: "text-amber-600" 
-            },
-            { 
-              title: "Enterprise Auditing", 
-              desc: "Standardized review across mission-critical categories including Technical, Legal, Regulatory, and SEO compliance nodes.", 
-              icon: Target, 
-              color: "text-slate-950" 
-            },
-            { 
-              title: "Grounding Integration", 
-              desc: "Live identity resolution using Google Search grounding to verify technical spec-sheets and exact product variants across the web.", 
-              icon: Globe, 
-              color: "text-amber-700" 
-            },
-            { 
-              title: "Persistent Registry", 
-              desc: "Enterprise-grade local persistence tied to corporate identity, maintaining mission data for up to 15 days of active audit.", 
-              icon: Database, 
-              color: "text-slate-800" 
-            },
-            { 
-              title: "High-Density Analytics", 
-              desc: "Real-time monitoring of extraction fidelity, data density, and vector counts to maintain catalogue integrity at scale.", 
-              icon: BarChart3, 
-              color: "text-emerald-700" 
-            },
-            { 
-              title: "Refinement Protocol", 
-              desc: "Direct-command refinement engine to deep-dive into specific micro-attributes or request compliance-level documentation details.", 
-              icon: Wand2, 
-              color: "text-amber-900" 
-            }
-          ].map((feature, i) => (
-            <div key={i} className="bg-white p-8 rounded-3xl border border-stone-200 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all group">
-              <div className={`w-12 h-12 rounded-xl bg-stone-50 flex items-center justify-center mb-6 shadow-inner border border-stone-100 ${feature.color}`}>
-                <feature.icon size={24} />
-              </div>
-              <h3 className="text-lg font-black text-slate-950 uppercase tracking-tight mb-2 group-hover:text-amber-700 transition-colors">{feature.title}</h3>
-              <p className="text-slate-500 font-medium leading-relaxed text-sm">{feature.desc}</p>
-            </div>
+        <div className="flex justify-center gap-1.5">
+          {steps.map((_, i) => (
+            <div key={i} className={`h-1 rounded-full transition-all duration-500 ${i === step ? 'w-6 bg-slate-950' : 'w-2 bg-stone-200'}`} />
           ))}
         </div>
+        <button onClick={() => step < steps.length - 1 ? setStep(step + 1) : onComplete()} className="w-full py-4 bg-slate-950 text-white rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-black transition-all">
+          {step < steps.length - 1 ? "Next Node" : "Launch Engine"}
+        </button>
+      </div>
+    </div>
+  );
+};
 
-        <div className="flex flex-col items-center gap-6">
-          <button onClick={onLogin} className="px-12 py-5 bg-slate-950 text-white rounded-2xl font-black text-base uppercase tracking-widest shadow-2xl hover:bg-black transition-all hover:scale-105 flex items-center gap-3">
-            Authenticate Access <ArrowRight size={24} className="text-amber-500" />
-          </button>
-          <div className="flex items-center gap-4 text-[10px] font-black text-stone-400 uppercase tracking-widest opacity-60">
-            <span>Corporate Deployment v5.0.1</span>
-            <div className="w-1 h-1 bg-stone-300 rounded-full"></div>
-            <span>Restricted Internal Access Only</span>
+const AboutPage: React.FC<{ onLogin: (p: UserProfile) => void, onRedirectToRegister: (email: string) => void }> = ({ onLogin, onRedirectToRegister }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isRecognized, setIsRecognized] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleContinue = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const registry = JSON.parse(localStorage.getItem('catalist_user_registry') || '{}');
+    const user = registry[email.toLowerCase()];
+
+    if (user) {
+      if (isRecognized) {
+        // Already recognized, trying to log in with password
+        if (user.password === password) {
+          onLogin(user);
+        } else {
+          setError('Invalid authentication key. Please try again.');
+        }
+      } else {
+        // Just recognized, now show password
+        setIsRecognized(true);
+      }
+    } else {
+      // Not in registry, go to onboarding
+      onRedirectToRegister(email);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center p-6 antialiased overflow-y-auto custom-scrollbar">
+      <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center py-12">
+        <div className="space-y-8 animate-in slide-in-from-left-8 duration-700">
+          <div className="space-y-4">
+            <div className="w-20 h-20 bg-slate-950 rounded-[2rem] flex items-center justify-center text-white shadow-2xl shadow-stone-200 ring-8 ring-white">
+              <SearchCode size={40} className="text-amber-500" />
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-5xl font-black text-slate-950 tracking-tighter uppercase leading-none">Cata<span className="text-amber-600">list</span> PRO</h1>
+              <p className="text-slate-400 font-bold uppercase tracking-[0.3em] text-sm">Forensic Product Intelligence Matrix</p>
+            </div>
+          </div>
+          
+          <div className="space-y-6">
+            {[
+              { icon: Zap, title: "Deep Extraction", text: "Convert packshots and PDP links into 100+ granular data vectors." },
+              { icon: Target, title: "95%+ Accuracy", description: "Gemini-powered technical auditing for catalogue integrity." },
+              { icon: Globe, title: "Google Grounding", description: "Real-time SKU verification against official manufacturer spec-sheets." }
+            ].map((f, i) => (
+              <div key={i} className="flex gap-4">
+                <div className="w-10 h-10 shrink-0 bg-white border border-stone-200 rounded-xl flex items-center justify-center text-amber-600 shadow-sm">
+                  <f.icon size={20} />
+                </div>
+                <div className="space-y-0.5">
+                  <h4 className="font-black text-slate-900 uppercase tracking-tight text-sm">{f.title}</h4>
+                  <p className="text-slate-500 text-xs font-medium leading-relaxed">Integrated technical auditing for high-fidelity commerce.</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl border border-stone-200 animate-in slide-in-from-right-8 duration-700">
+          <form onSubmit={handleContinue} className="space-y-6">
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black text-slate-950 uppercase tracking-tighter">Authenticate Access</h3>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Connect to the intelligence grid</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Terminal</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
+                  <input 
+                    required 
+                    type="email" 
+                    placeholder="analyst@phonepe.com" 
+                    disabled={isRecognized}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-11 pr-4 py-4 text-xs font-bold text-slate-950 outline-none focus:border-amber-600 shadow-inner transition-all disabled:opacity-50" 
+                    value={email} 
+                    onChange={e => setEmail(e.target.value)} 
+                  />
+                </div>
+              </div>
+
+              {isRecognized && (
+                <div className="space-y-1 animate-in slide-in-from-top-4 duration-300">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Profile Key</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
+                    <input 
+                      required 
+                      type="password" 
+                      placeholder="••••••••" 
+                      autoFocus
+                      className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-11 pr-4 py-4 text-xs font-bold text-slate-950 outline-none focus:border-amber-600 shadow-inner transition-all" 
+                      value={password} 
+                      onChange={e => setPassword(e.target.value)} 
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600">
+                <AlertCircle size={16} />
+                <p className="text-[11px] font-bold">{error}</p>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <button type="submit" className="w-full py-4 bg-slate-950 text-white rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-stone-200 hover:bg-black transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+                {isRecognized ? "Access System" : "Continue"} <ArrowRight size={16} className="text-amber-500" />
+              </button>
+              {isRecognized && (
+                <button type="button" onClick={() => setIsRecognized(false)} className="w-full py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-950 transition-colors">
+                  Not your email?
+                </button>
+              )}
+            </div>
+          </form>
+          
+          <div className="mt-8 pt-8 border-t border-stone-100 flex items-center justify-between text-[10px] font-black text-slate-300 uppercase tracking-widest">
+            <span>SECURE 04-PHX</span>
+            <span>v5.0.1-PRO</span>
           </div>
         </div>
       </div>
     </div>
   );
 };
+
+// --- Main App Flow ---
 
 const Catalist = () => {
   const [activeTab, setActiveTab] = useState<'ingest' | 'review' | 'catalogue' | 'analytics'>('ingest');
@@ -546,14 +546,16 @@ const Catalist = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [showTour, setShowTour] = useState(false);
-  const [isAboutPage, setIsAboutPage] = useState(false); 
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [preFilledEmail, setPreFilledEmail] = useState('');
   const [refineQuery, setRefineQuery] = useState('');
   const [isRefining, setIsRefining] = useState(false);
   const [selectedRegistryItem, setSelectedRegistryItem] = useState<AnalysisResult | null>(null);
 
+  const currentEntity = useMemo(() => pendingBatch[currentReviewIdx], [pendingBatch, currentReviewIdx]);
+
   const [historyStack, setHistoryStack] = useState<AnalysisResult[][]>([]); 
   const [historyPointer, setHistoryPointer] = useState(-1);
-  const [lastRefinementLog, setLastRefinementLog] = useState<string | null>(null);
 
   useEffect(() => {
     const savedSession = localStorage.getItem('catalist_active_session');
@@ -569,7 +571,6 @@ const Catalist = () => {
         return ageInMs < REGISTRY_EXPIRY_DAYS * MS_PER_DAY;
       });
       setResults(filteredResults);
-      localStorage.setItem(registryKey, JSON.stringify(filteredResults));
     }
     setInitialized(true);
   }, []);
@@ -581,75 +582,44 @@ const Catalist = () => {
     }
   }, [results, user, initialized]);
 
-  const handleLoginComplete = (profile: UserProfile) => {
-    const updatedUser = { ...profile, hasSeenTour: profile.hasSeenTour ?? false };
-    setUser(updatedUser);
-    setIsAboutPage(false);
-    localStorage.setItem('catalist_active_session', JSON.stringify(updatedUser));
-    
-    const registryKey = `catalist_registry_${profile.email}`;
-    const savedResults = JSON.parse(localStorage.getItem(registryKey) || '[]');
-    const filteredResults = savedResults.filter((res: AnalysisResult) => {
-      const ageInMs = Date.now() - (res.createdAt || 0);
-      return ageInMs < REGISTRY_EXPIRY_DAYS * MS_PER_DAY;
+  const pushToHistory = useCallback((newBatch: AnalysisResult[]) => {
+    setHistoryStack(prev => {
+      const newStack = prev.slice(0, historyPointer + 1);
+      newStack.push(JSON.parse(JSON.stringify(newBatch)));
+      if (newStack.length > 50) newStack.shift();
+      return newStack;
     });
-    setResults(filteredResults);
-    
-    if (!updatedUser.hasSeenTour) setShowTour(true);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('catalist_active_session');
-    setUser(null);
-    setIsAboutPage(true);
-    setResults([]);
-    setPendingBatch([]);
-    setHistoryStack([]);
-    setHistoryPointer(-1);
-  };
-
-  const completeTour = () => {
-    if (user) {
-      const updatedUser = { ...user, hasSeenTour: true };
-      setUser(updatedUser);
-      localStorage.setItem('catalist_active_session', JSON.stringify(updatedUser));
-    }
-    setShowTour(false);
-    setActiveTab('ingest');
-  };
-
-  const pushToHistory = (newBatch: AnalysisResult[]) => {
-    const newStack = historyStack.slice(0, historyPointer + 1);
-    newStack.push(JSON.parse(JSON.stringify(newBatch)));
-    if (newStack.length > 50) newStack.shift();
-    setHistoryStack(newStack);
-    setHistoryPointer(newStack.length - 1);
-  };
+    setHistoryPointer(prev => prev + 1);
+  }, [historyPointer]);
 
   const runExhaustiveCatalogueEngine = async (inputs: {data: string, type: 'image' | 'url' | 'text'}[], sourceName: string): Promise<AnalysisResult> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const prompt = `Act as a Senior Lead Product Intelligence Specialist. Perform a MAXIMUM-DEPTH forensic catalogue extraction.
+    const prompt = `Act as a Senior Lead Product Intelligence Specialist and Forensic SEO Strategist. Perform a MAXIMUM-DEPTH forensic catalogue extraction.
 
 CRITICAL MANDATE:
 Extract exhaustive, SKU-level precise technical data. You MUST populate EVERY relevant category with high-density attributes. 
-Aim for 30+ granular points for 'Technical Integrity' and 12-15 for others. DO NOT aggregate fields; keep them atomic.
+Aim for 50+ granular points for 'Technical Integrity' and 20+ for others. DO NOT aggregate fields; keep them atomic.
+
+SEO DISCOVERY MANDATE:
+You MUST generate 30+ highly relevant keywords, meta-tags, and a compelling 'Product Notion' that summarizes the unique value proposition. 
+If no SEO data is explicitly found, INFER it based on the product category and technical specs for competitive performance.
 
 USE THESE EXACT KEYS FOR THE 'group' FIELD: Core, SEO, Technical, Legal, Dimensions, Nutritional, Logistics, Usage, Safety, Marketing.
 
 DESCRIPTIONS:
 - Core: Precise Model IDs, brand hierarchy, SKU variants, hex colors.
-- SEO: 30+ keywords, product utility notion, occasion relevance.
-- Technical: Chipsets, clock speeds, FAB (nm), display tech (LTPO/nit), storage types (UFS 4.0), sensor models, battery chemistry.
-- Legal: Certifications (FCC/CE/BIS), SAR, regulatory disclaimers, patent nodes.
-- Dimensions: Precise weights (g), measurements (mm), screen-to-body ratios.
-- Nutritional: (Food only) Precise ingredients list, full macro breakdown, allergens, shelf life nodes.
-- Logistics: HS Codes, palletization, stackability, storage conditions.
-- Usage: Maintenance protocols, setup guides, compatibility matrices.
-- Safety: IP ratings, impact standards (MIL-STD), electrical safety nodes.
-- Marketing: Brand USPs, visual identity stories, target personas.
+- SEO: 30+ keywords, product utility notion, occasion relevance, search tags, consumer intent signals.
+- Technical: Full forensic breakdown of chipsets, architecture, connectivity (WiFi 6E/Bluetooth 5.3), specialized sensors, thermal management, software version nodes.
+- Legal: Certifications (FCC/CE/BIS), SAR, regulatory disclaimers, patent nodes, compliance standards.
+- Dimensions: Precise weights (g/kg), measurements (mm), screen-to-body ratios, chassis material specs.
+- Nutritional: (Food only) Precise ingredients, full macro breakdown (per 100g and serving), allergens, shelf life, storage nodes.
+- Logistics: HS Codes, palletization, stackability, fragile ratings.
+- Usage: Maintenance protocols, setup guides, compatibility matrices, cross-sell identifiers.
+- Safety: IP ratings, electrical standards, impact protection (MIL-STD), material toxicity nodes.
+- Marketing: Brand USPs, visual identity stories, target personas, competitive edge over rivals.
 
-CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a category applies, fill it with rich, measurable units.`;
+CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. Exhaustively audit the brand's official site and top-tier retailers for hidden technical specs.`;
 
     const contents: any = {
       parts: [
@@ -666,7 +636,7 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
       contents,
       config: { 
         tools: [{ googleSearch: {} }],
-        thinkingConfig: { thinkingBudget: 24000 }, 
+        thinkingConfig: { thinkingBudget: 32768 }, 
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -682,7 +652,7 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
                   name: { type: Type.STRING }, 
                   value: { type: Type.STRING }, 
                   confidence: { type: Type.NUMBER }, 
-                  group: { type: Type.STRING, description: "Must be exactly one of the requested keys." } 
+                  group: { type: Type.STRING } 
                 }, 
                 required: ['name', 'value', 'confidence', 'group'] 
               } 
@@ -702,22 +672,20 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
     const parsed = JSON.parse(response.text || '{}');
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     
-    // NORMALIZE layer to ensure UI mapping
     const validGroups = CATALOGUE_SECTIONS.map(c => c.group);
     const normalizedAttributes = (parsed.attributes || []).map((attr: any) => {
       let g = attr.group || 'Technical';
       const cleanG = String(g).trim();
-      
       if (!validGroups.includes(cleanG as any)) {
         const lowerG = cleanG.toLowerCase();
         if (lowerG.includes('core')) g = 'Core';
         else if (lowerG.includes('seo') || lowerG.includes('search')) g = 'SEO';
         else if (lowerG.includes('tech')) g = 'Technical';
-        else if (lowerG.includes('legal') || lowerG.includes('regul') || lowerG.includes('complian')) g = 'Legal';
-        else if (lowerG.includes('dim') || lowerG.includes('physic') || lowerG.includes('scale')) g = 'Dimensions';
+        else if (lowerG.includes('legal') || lowerG.includes('regul')) g = 'Legal';
+        else if (lowerG.includes('dim') || lowerG.includes('scale')) g = 'Dimensions';
         else if (lowerG.includes('nutri')) g = 'Nutritional';
         else if (lowerG.includes('logis')) g = 'Logistics';
-        else if (lowerG.includes('usage') || lowerG.includes('appli')) g = 'Usage';
+        else if (lowerG.includes('usage')) g = 'Usage';
         else if (lowerG.includes('safety')) g = 'Safety';
         else if (lowerG.includes('market')) g = 'Marketing';
         else g = 'Technical'; 
@@ -753,7 +721,7 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
     const batchResults: AnalysisResult[] = [];
     try {
       if (selectedFiles.length > 0 || pdpUrls.length > 0) {
-        setProcessingStatus("Crawling manufacturer spec-sheets...");
+        setProcessingStatus("Deep-crawling manufacturer repositories...");
         const compositeInputs: {data: string, type: 'image' | 'url' | 'text'}[] = [];
         const imageBase64s: string[] = [];
         for (const file of selectedFiles) {
@@ -778,10 +746,9 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
       }
       if (batchResults.length > 0) {
         const updatedPending = [...pendingBatch, ...batchResults];
-        const newIdx = pendingBatch.length; 
         setPendingBatch(updatedPending);
         pushToHistory(updatedPending);
-        setCurrentReviewIdx(newIdx);
+        setCurrentReviewIdx(pendingBatch.length);
         setActiveTab('review');
       }
     } catch (e) {
@@ -803,10 +770,10 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `Refine this SKU data with forensic depth: "${query}". You MUST return attributes categorized into exactly: Core, SEO, Technical, Legal, Dimensions, Nutritional, Logistics, Usage, Safety, Marketing. State: ${JSON.stringify(pendingBatch[currentReviewIdx])}.`,
+        contents: `Refine this SKU data with maximum forensic depth: "${query}". Ensure all SEO metadata and technical vectors are maximized for accuracy. Category mandate: Core, SEO, Technical, Legal, Dimensions, Nutritional, Logistics, Usage, Safety, Marketing. Current state: ${JSON.stringify(pendingBatch[currentReviewIdx])}.`,
         config: { 
           responseMimeType: "application/json",
-          thinkingConfig: { thinkingBudget: 12000 }
+          thinkingConfig: { thinkingBudget: 16000 }
         }
       });
       const updated = JSON.parse(response.text || '{}');
@@ -814,26 +781,25 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
       newBatch[currentReviewIdx] = { ...newBatch[currentReviewIdx], ...updated };
       setPendingBatch(newBatch);
       pushToHistory(newBatch);
-      setLastRefinementLog(query);
       setRefineQuery('');
     } catch (e) { console.error(e); } finally { setIsRefining(false); }
   };
 
-  const handleUndo = () => {
+  const handleUndo = useCallback(() => {
     if (historyPointer > 0) {
       const newPointer = historyPointer - 1;
       setHistoryPointer(newPointer);
       setPendingBatch(JSON.parse(JSON.stringify(historyStack[newPointer])));
     }
-  };
+  }, [historyPointer, historyStack]);
 
-  const handleRedo = () => {
+  const handleRedo = useCallback(() => {
     if (historyPointer < historyStack.length - 1) {
       const newPointer = historyPointer + 1;
       setHistoryPointer(newPointer);
       setPendingBatch(JSON.parse(JSON.stringify(historyStack[newPointer])));
     }
-  };
+  }, [historyPointer, historyStack]);
 
   const commitToRegistry = () => {
     const committed = pendingBatch[currentReviewIdx];
@@ -844,8 +810,30 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
     if (newBatch.length === 0) setActiveTab('catalogue');
     else {
       setCurrentReviewIdx(Math.max(0, currentReviewIdx - 1));
-      setLastRefinementLog(null);
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('catalist_active_session');
+    setUser(null);
+    setIsRegistering(false);
+  };
+
+  const handleLogin = (p: UserProfile) => {
+    setUser(p);
+    localStorage.setItem('catalist_active_session', JSON.stringify(p));
+    
+    // Load that user's specific registry
+    const registryKey = `catalist_registry_${p.email}`;
+    const savedResults = JSON.parse(localStorage.getItem(registryKey) || '[]');
+    setResults(savedResults);
+    
+    if (!p.hasSeenTour) setShowTour(true);
+  };
+
+  const handleRedirectToRegister = (email: string) => {
+    setPreFilledEmail(email);
+    setIsRegistering(true);
   };
 
   const handleCopySection = (group: string, attributes: ProductAttribute[]) => {
@@ -854,10 +842,13 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
   };
 
   if (!initialized) return null;
-  if (isAboutPage) return <AboutPage onLogin={() => setIsAboutPage(false)} />;
-  if (!user) return <Onboarding onComplete={handleLoginComplete} />;
-
-  const currentEntity = pendingBatch[currentReviewIdx];
+  
+  if (!user) {
+    if (isRegistering) {
+      return <Onboarding initialEmail={preFilledEmail} onComplete={handleLogin} />;
+    }
+    return <AboutPage onLogin={handleLogin} onRedirectToRegister={handleRedirectToRegister} />;
+  }
 
   return (
     <div className="flex h-screen bg-stone-50 text-slate-950 font-sans antialiased overflow-hidden">
@@ -894,7 +885,7 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
       </aside>
 
       <main className="flex-1 flex flex-col relative overflow-hidden">
-        {showTour && <QuickTour onComplete={completeTour} />}
+        {showTour && <QuickTour onComplete={() => { if (user) { const u = {...user, hasSeenTour: true}; setUser(u); localStorage.setItem('catalist_active_session', JSON.stringify(u)); } setShowTour(false); }} />}
         {activeTab === 'ingest' && (
           <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-8">
             <div className="max-w-4xl mx-auto space-y-6 py-6 animate-in fade-in duration-700">
@@ -1026,11 +1017,14 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-6 pb-20">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-max">
                     {CATALOGUE_SECTIONS
-                      .filter(section => currentEntity.attributes.some(a => String(a.group).toLowerCase() === section.group.toLowerCase()))
                       .map(section => {
                         const sectionAttrs = currentEntity.attributes.filter(a => String(a.group).toLowerCase() === section.group.toLowerCase());
+                        const isSEO = section.group === 'SEO';
+                        const hasContent = sectionAttrs.length > 0 || isSEO;
+                        if (!hasContent) return null;
+
                         return (
-                          <div key={section.group} className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex flex-col h-[480px] animate-in fade-in slide-in-from-bottom-2 duration-300">
+                          <div key={section.group} className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex flex-col h-[350px] animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex items-center justify-between mb-3 shrink-0">
                               <div className="flex items-center gap-2">
                                 <section.icon size={16} className={section.color} />
@@ -1039,17 +1033,24 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
                               <div className="flex items-center gap-1">
                                  <button onClick={() => handleCopySection(section.group, currentEntity.attributes)} className="p-0.5 text-stone-300 hover:text-amber-700 transition-all" title="Copy Section"><Copy size={12} /></button>
                                  <span className="text-[9px] font-black px-2 py-0.5 rounded leading-none text-emerald-700 bg-emerald-50">
-                                   {sectionAttrs.length} Points
+                                   {sectionAttrs.length + (isSEO ? 1 : 0)} Pt
                                  </span>
                               </div>
                             </div>
-                            {section.group === 'SEO' && (
-                              <div className="p-2 bg-stone-50 rounded-xl border border-stone-100 space-y-1.5 mb-3 shrink-0 shadow-inner">
-                                <p className="text-[10px] font-bold text-slate-600 leading-tight italic line-clamp-2">"{currentEntity.seoInfo.productNotion}"</p>
-                                <div className="flex flex-wrap gap-1">
-                                  {currentEntity.seoInfo.keywords.slice(0, 10).map((buzz, i) => (
-                                    <span key={i} className="px-1 py-0.5 bg-white border border-stone-200 text-[7px] font-black text-amber-700 rounded uppercase">#{buzz}</span>
-                                  ))}
+                            {isSEO && (
+                              <div className="p-3 bg-stone-50 rounded-xl border border-stone-100 space-y-3 mb-3 shrink-0 shadow-inner">
+                                <div>
+                                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Product Notion</p>
+                                  <p className="text-[10px] font-bold text-slate-600 leading-tight italic line-clamp-3">"{currentEntity.seoInfo.productNotion || 'Forensic intent analysis active...'}"</p>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Metadata Tags</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {(currentEntity.seoInfo.keywords || []).slice(0, 20).map((buzz, i) => (
+                                      <span key={i} className="px-1.5 py-0.5 bg-white border border-stone-200 text-[7px] font-black text-amber-700 rounded uppercase shadow-sm">#{buzz}</span>
+                                    ))}
+                                    {(!currentEntity.seoInfo.keywords || currentEntity.seoInfo.keywords.length === 0) && <span className="text-[7px] text-stone-300 italic">No search signals...</span>}
+                                  </div>
                                 </div>
                               </div>
                             )}
@@ -1074,7 +1075,7 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
                   <div className="grid grid-cols-2 gap-2 py-2 border-y border-stone-100/60">
                     <div className="text-center border-r border-stone-100">
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 leading-none">Vectors</p>
-                      <p className="text-lg font-black text-amber-700 tabular-nums leading-none">{currentEntity.attributes.length}</p>
+                      <p className="text-lg font-black text-amber-700 tabular-nums leading-none">{currentEntity.attributes.length + (currentEntity.seoInfo.keywords?.length || 0)}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 leading-none">Fidelity</p>
@@ -1119,35 +1120,20 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
                 <button onClick={() => exportRegistryToCSV(results)} className="flex items-center gap-1.5 px-5 py-2 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-black transition-all hover:translate-y-[-1px]"><Download size={14} className="text-amber-500" /> Export All</button>
               </div>
             </div>
-            {results.length === 0 ? (
-              <div className="py-20 text-center space-y-4 bg-white rounded-3xl border border-stone-200 max-w-2xl mx-auto shadow-sm">
-                <Sparkles size={48} className="text-stone-100 mx-auto" strokeWidth={1} />
-                <p className="text-slate-400 font-black text-base uppercase tracking-widest">Registry Offline</p>
-                <button onClick={() => setActiveTab('ingest')} className="px-6 py-2.5 bg-slate-950 text-white rounded-lg font-black text-[11px] uppercase tracking-widest shadow-xl hover:bg-black border border-amber-600/20">Initialize Audit</button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {results.map((res) => (
-                  <div key={res.id} onClick={() => setSelectedRegistryItem(res)} className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 group hover:border-amber-400 transition-all cursor-pointer relative overflow-hidden hover:shadow-lg active:scale-[0.99]">
-                    <div className="flex gap-5">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border shadow-sm ${res.isFood ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-stone-50 text-slate-950 border-stone-200'}`}><Package size={20} /></div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex justify-between mb-1"><span className="text-[8px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-0.5 rounded shadow-inner border border-amber-100/50">{res.taxonomy.category}</span><div className="text-emerald-700 font-black text-[8px] uppercase flex items-center gap-1"><CheckCircle size={10} /> Sync</div></div>
-                        <h3 className="text-base font-black text-slate-950 truncate leading-tight group-hover:text-amber-700 transition-colors uppercase tracking-tight">{res.coreInfo.displayName}</h3>
-                        <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">{res.coreInfo.brand}</p>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between border-t border-stone-50 pt-3">
-                      <div className="flex gap-1.5">{res.seoInfo.tags.slice(0, 2).map((t, i) => <span key={i} className="text-[8px] font-black text-slate-500 bg-stone-50 px-1.5 py-0.5 rounded uppercase border border-stone-200">{t}</span>)}</div>
-                      <div className="flex gap-1.5">
-                        <button onClick={(e) => { e.stopPropagation(); exportSingleToCSV(res); }} className="p-1.5 text-stone-300 hover:text-amber-700 rounded-lg"><Download size={16} /></button>
-                        <button onClick={(e) => { e.stopPropagation(); setResults(results.filter(r => r.id !== res.id)); }} className="p-1.5 text-stone-300 hover:text-red-700 rounded-lg"><Trash2 size={16} /></button>
-                      </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {results.map((res) => (
+                <div key={res.id} onClick={() => setSelectedRegistryItem(res)} className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 group hover:border-amber-400 transition-all cursor-pointer relative overflow-hidden hover:shadow-lg active:scale-[0.99]">
+                  <div className="flex gap-5">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border shadow-sm ${res.isFood ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-stone-50 text-slate-950 border-stone-200'}`}><Package size={20} /></div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex justify-between mb-1"><span className="text-[8px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-0.5 rounded shadow-inner border border-amber-100/50">{res.taxonomy.category}</span><div className="text-emerald-700 font-black text-[8px] uppercase flex items-center gap-1"><CheckCircle size={10} /> Sync</div></div>
+                      <h3 className="text-base font-black text-slate-950 truncate leading-tight group-hover:text-amber-700 transition-colors uppercase tracking-tight">{res.coreInfo.displayName}</h3>
+                      <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">{res.coreInfo.brand}</p>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              ))}
+            </div>
             {selectedRegistryItem && (
               <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-300">
                 <div className="bg-white w-full max-w-[94%] h-full rounded-[2rem] shadow-2xl flex flex-col overflow-hidden relative border border-white/50">
@@ -1159,32 +1145,45 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="text-[9px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-1 rounded-lg tracking-widest border border-amber-100/50 leading-none">{selectedRegistryItem.taxonomy.category}</span>
-                          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest bg-stone-50 px-2 py-1 rounded-lg border border-stone-200 leading-none">{selectedRegistryItem.taxonomy.segment}</span>
                         </div>
                         <h2 className="text-2xl font-black text-slate-950 tracking-tighter uppercase leading-none">{selectedRegistryItem.coreInfo.displayName}</h2>
-                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em]">{selectedRegistryItem.coreInfo.brand} • Entity: {selectedRegistryItem.id.toUpperCase()}</p>
                       </div>
                     </div>
-                    <button onClick={() => setSelectedRegistryItem(null)} className="p-3 bg-stone-50 text-stone-400 rounded-xl hover:bg-red-50 hover:text-red-700 transition-all active:scale-95 shadow-inner"><X size={24} /></button>
+                    <button onClick={() => setSelectedRegistryItem(null)} className="p-3 bg-stone-50 text-stone-400 rounded-xl hover:bg-red-50 hover:text-red-700 transition-all shadow-inner"><X size={24} /></button>
                   </div>
                   <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-8 bg-stone-50/50">
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 auto-rows-max">
                         {CATALOGUE_SECTIONS
-                          .filter(section => selectedRegistryItem.attributes.some(a => String(a.group).toLowerCase() === section.group.toLowerCase()))
                           .map(section => {
                             const sectionAttrs = selectedRegistryItem.attributes.filter(a => String(a.group).toLowerCase() === section.group.toLowerCase());
+                            const isSEO = section.group === 'SEO';
+                            const hasContent = sectionAttrs.length > 0 || isSEO;
+                            if (!hasContent) return null;
+                            
                             return (
-                              <div key={section.group} className="bg-white p-5 lg:p-6 rounded-2xl border border-stone-200 shadow-sm flex flex-col h-[480px]">
+                              <div key={section.group} className="bg-white p-5 lg:p-6 rounded-2xl border border-stone-200 shadow-sm flex flex-col h-[350px]">
                                 <div className="flex items-center justify-between border-b border-stone-50 pb-4 mb-4 shrink-0">
                                   <div className="flex items-center gap-3">
                                     <section.icon size={18} className={section.color} />
                                     <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-800 leading-none">{section.title}</h5>
                                   </div>
-                                  <div className="flex items-center gap-1.5">
-                                     <button onClick={() => handleCopySection(section.group, selectedRegistryItem.attributes)} className="p-1 text-stone-300 hover:text-amber-700 transition-all" title="Copy Section"><Copy size={12} /></button>
-                                     <span className="text-[9px] font-black text-slate-500 bg-stone-50 px-2 py-0.5 rounded shadow-inner border border-stone-100 leading-none">{sectionAttrs.length} Pt</span>
-                                  </div>
                                 </div>
+                                {isSEO && (
+                                  <div className="p-3 bg-stone-50 rounded-xl border border-stone-100 space-y-3 mb-3 shrink-0 shadow-inner">
+                                    <div>
+                                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Product Notion</p>
+                                      <p className="text-[10px] font-bold text-slate-600 leading-tight italic line-clamp-3">"{selectedRegistryItem.seoInfo.productNotion || 'N/A'}"</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Metadata Tags</p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {(selectedRegistryItem.seoInfo.keywords || []).slice(0, 20).map((buzz, i) => (
+                                          <span key={i} className="px-1.5 py-0.5 bg-white border border-stone-200 text-[7px] font-black text-amber-700 rounded uppercase shadow-sm">#{buzz}</span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                                 <div className="flex flex-col gap-2 overflow-y-auto custom-scrollbar pr-2 flex-1 pb-2">
                                   {sectionAttrs.map((attr, i) => <AttributeCard key={i} attr={attr} />)}
                                 </div>
@@ -1200,18 +1199,11 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a categ
                         <p className="text-2xl font-black text-amber-700 tracking-tighter leading-none">{Math.round(selectedRegistryItem.dataDensity)}%</p>
                       </div>
                       <div className="text-center group">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 group-hover:text-emerald-700 transition-colors leading-none">Audit Confidence</p>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 group-hover:text-emerald-700 transition-colors leading-none">Confidence</p>
                         <p className="text-2xl font-black text-emerald-700 tracking-tighter leading-none">{Math.round(selectedRegistryItem.qualityScore)}%</p>
                       </div>
-                      <div className="text-center group">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 group-hover:text-slate-950 transition-colors leading-none">Total vectors</p>
-                        <p className="text-2xl font-black text-slate-950 tracking-tighter leading-none">{selectedRegistryItem.attributes.length}</p>
-                      </div>
                     </div>
-                    <div className="flex gap-3">
-                      <button onClick={() => exportSingleToCSV(selectedRegistryItem)} className="px-6 py-3 bg-stone-50 text-slate-600 rounded-lg text-[9px] font-black uppercase tracking-widest border border-stone-200 hover:bg-stone-100 transition-all flex items-center gap-2 shadow-sm"><Download size={16} className="text-amber-600" /> Export Asset</button>
-                      <button onClick={() => setSelectedRegistryItem(null)} className="px-8 py-3 bg-slate-950 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl">Dismiss</button>
-                    </div>
+                    <button onClick={() => setSelectedRegistryItem(null)} className="px-8 py-3 bg-slate-950 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-xl">Dismiss</button>
                   </div>
                 </div>
               </div>

@@ -1,0 +1,7 @@
+{
+  "description": "Intelligent e-commerce catalogue engine for taxonomy, schema and attribute extraction.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "name": "Catalist"
+}

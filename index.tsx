@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { 
@@ -72,10 +71,14 @@ import { GoogleGenAI, Type } from '@google/genai';
 
 // --- Types & Constants ---
 
+const REGISTRY_EXPIRY_DAYS = 15;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 interface UserProfile {
   name: string;
   email: string;
   team: string;
+  password?: string;
   hasSeenTour?: boolean;
 }
 
@@ -83,7 +86,7 @@ interface ProductAttribute {
   name: string;
   value: string;
   confidence: number;
-  group: 'Technical' | 'Legal' | 'Nutritional' | 'Marketing' | 'Logistics' | 'Usage' | 'Safety' | 'Dimensions' | 'Core' | 'SEO';
+  group: 'Core' | 'SEO' | 'Technical' | 'Legal' | 'Dimensions' | 'Nutritional' | 'Logistics' | 'Usage' | 'Safety' | 'Marketing';
 }
 
 interface Taxonomy {
@@ -100,7 +103,7 @@ interface AnalysisResult {
   insights: string;
   dataDensity: number;
   qualityScore: number;
-  sourceType: 'composite' | 'csv' | 'sample';
+  sourceType: 'composite' | 'url' | 'text';
   sourceValue: string;
   isFood: boolean;
   status: 'completed' | 'failed';
@@ -108,6 +111,7 @@ interface AnalysisResult {
   fallbackImageUrl?: string;
   brandLogoUrl?: string;
   groundingSources?: any[];
+  createdAt?: number;
   coreInfo: {
     displayName: string;
     brand: string;
@@ -121,6 +125,19 @@ interface AnalysisResult {
     occasionRelevance: string;
   };
 }
+
+const CATALOGUE_SECTIONS = [
+  { title: 'Core DNA', group: 'Core', icon: Package, color: 'text-slate-950' },
+  { title: 'SEO Discovery', group: 'SEO', icon: Sparkles, color: 'text-amber-600' },
+  { title: 'Technical Integrity', group: 'Technical', icon: Settings, color: 'text-slate-700' },
+  { title: 'Regulatory Compliance', group: 'Legal', icon: ShieldAlert, color: 'text-red-800' },
+  { title: 'Physical Scale', group: 'Dimensions', icon: Maximize2, color: 'text-stone-700' },
+  { title: 'Health & Nutri', group: 'Nutritional', icon: Scale, color: 'text-emerald-800' },
+  { title: 'Logistics/Flow', group: 'Logistics', icon: Truck, color: 'text-slate-900' },
+  { title: 'Application', group: 'Usage', icon: Clock, color: 'text-amber-800' },
+  { title: 'Safety Protocol', group: 'Safety', icon: ShieldCheck, color: 'text-emerald-900' },
+  { title: 'Market Positioning', group: 'Marketing', icon: TrendingUp, color: 'text-stone-500' }
+] as const;
 
 // --- Helper Functions ---
 
@@ -183,18 +200,17 @@ const ProductImageViewer: React.FC<{ result: AnalysisResult }> = ({ result }) =>
   const hasProductFallback = !!result.fallbackImageUrl && !productImgError;
   const hasLogoFallback = !!result.brandLogoUrl && !logoImgError;
 
-  // Determine representative image based on category
   const getRepImage = () => {
     if (result.isFood) return "https://images.unsplash.com/photo-1542831371-29b0f74f9713?auto=format&fit=crop&q=80&w=800";
     const cat = (result.taxonomy.category || '').toLowerCase();
     if (cat.includes('kitchen')) return "https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&q=80&w=800";
     if (cat.includes('appliance') || cat.includes('home')) return "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80&w=800";
     if (cat.includes('electronic') || cat.includes('tech')) return "https://images.unsplash.com/photo-1526738549149-8e07eca270b4?auto=format&fit=crop&q=80&w=800";
-    return "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=800"; // Generic product
+    return "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=800";
   };
 
   return (
-    <div className="w-full h-48 lg:h-56 rounded-2xl overflow-hidden shadow-inner bg-stone-50 border border-stone-200 group relative">
+    <div className="w-full h-44 lg:h-48 rounded-2xl overflow-hidden shadow-inner bg-stone-50 border border-stone-200 group relative">
        {hasSource ? (
          <div className="flex overflow-x-auto h-full snap-x snap-mandatory scroll-smooth hide-scrollbar bg-white">
             {images.map((img, i) => (
@@ -227,7 +243,6 @@ const ProductImageViewer: React.FC<{ result: AnalysisResult }> = ({ result }) =>
             </div>
          </div>
        ) : (
-         /* Terminal Fallback: Branded Graphic Card with Representative Visual */
          <div className="w-full h-full relative group">
             <img 
               src={getRepImage()} 
@@ -235,22 +250,14 @@ const ProductImageViewer: React.FC<{ result: AnalysisResult }> = ({ result }) =>
               alt="Category Fallback" 
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/10 to-transparent flex flex-col items-center justify-end p-6 gap-3 transition-colors">
-               <div className={`w-16 h-16 rounded-3xl flex items-center justify-center border-4 border-white shadow-xl backdrop-blur-sm ${result.isFood ? 'bg-emerald-700/80 text-white' : 'bg-slate-900/80 text-white'}`}>
-                 {result.isFood ? <Leaf size={32} /> : <Package size={32} />}
+               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border-2 border-white shadow-xl backdrop-blur-sm ${result.isFood ? 'bg-emerald-700/80 text-white' : 'bg-slate-900/80 text-white'}`}>
+                 {result.isFood ? <Leaf size={24} /> : <Package size={24} />}
                </div>
                <div className="text-center space-y-0.5 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/20">
-                 <p className="text-[8px] font-black uppercase tracking-[0.2em] text-white/80">Asset Mapping Offline</p>
-                 <p className="text-[11px] font-black uppercase tracking-tight text-white">{result.coreInfo.brand}</p>
+                 <p className="text-[7px] font-black uppercase tracking-[0.2em] text-white/80">Asset Mapping Offline</p>
+                 <p className="text-[10px] font-black uppercase tracking-tight text-white">{result.coreInfo.brand}</p>
                </div>
             </div>
-         </div>
-       )}
-       
-       {hasSource && images.length > 1 && (
-         <div className="absolute bottom-3 left-0 right-0 flex justify-center pointer-events-none">
-           <div className="px-3 py-1 bg-slate-950/80 text-white text-[7px] font-black rounded-full backdrop-blur-md uppercase tracking-widest flex items-center gap-2 shadow-2xl border border-white/20">
-             <ImageIcon size={10} className="text-amber-500" /> {images.length} Local Assets <ChevronRight size={10} />
-           </div>
          </div>
        )}
     </div>
@@ -267,30 +274,30 @@ const AttributeCard: React.FC<{ attr: ProductAttribute }> = ({ attr }) => {
   };
 
   return (
-    <div className="relative flex flex-col gap-0.5 p-2 bg-white border border-stone-100 rounded-lg hover:border-amber-300 hover:shadow-sm transition-all group select-none">
+    <div className="relative flex flex-col gap-1 px-3 py-2 bg-white border border-stone-100 rounded-lg hover:border-amber-300 hover:shadow-md transition-all group select-none animate-in fade-in duration-300">
       <div className="flex items-center justify-between">
-        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight truncate">{attr.name}</span>
+        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate shrink-0 max-w-[70%] leading-none">{attr.name}</span>
         <div className="flex items-center gap-1">
           <button 
             onClick={handleCopy} 
-            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-slate-300 hover:text-amber-700 rounded"
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-stone-300 hover:text-amber-700 rounded"
             title="Copy Attribute"
           >
-            {copied ? <CheckCircle2 size={8} className="text-emerald-700" /> : <Copy size={8} />}
+            {copied ? <CheckCircle2 size={10} className="text-emerald-700" /> : <Copy size={10} />}
           </button>
-          <div className={`shrink-0 text-[8px] font-black px-1 py-0.5 rounded ${attr.confidence > 0.9 ? 'text-emerald-700 bg-emerald-50' : 'text-amber-700 bg-amber-50'}`}>
+          <div className={`shrink-0 text-[8px] font-black px-1 py-0.5 rounded leading-none ${attr.confidence > 0.9 ? 'text-emerald-600 bg-emerald-50' : 'text-amber-600 bg-amber-50'}`}>
             {Math.round(attr.confidence * 100)}%
           </div>
         </div>
       </div>
-      <p className="text-[12px] font-semibold text-slate-950 leading-tight break-words" title={attr.value}>{attr.value}</p>
+      <p className="text-[12px] font-bold text-slate-950 leading-tight break-words" title={attr.value}>{attr.value}</p>
     </div>
   );
 };
 
 const Onboarding: React.FC<{ onComplete: (profile: UserProfile) => void }> = ({ onComplete }) => {
   const [step, setStep] = useState<'email' | 'details'>('email');
-  const [formData, setFormData] = useState({ name: '', email: '', team: '', customTeam: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', team: '', password: '', customTeam: '' });
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState('');
 
@@ -305,8 +312,17 @@ const Onboarding: React.FC<{ onComplete: (profile: UserProfile) => void }> = ({ 
     setIsVerifying(true);
     setTimeout(() => {
       const savedRegistry = JSON.parse(localStorage.getItem('catalist_user_registry') || '{}');
-      if (savedRegistry[formData.email]) onComplete(savedRegistry[formData.email]);
-      else setStep('details');
+      if (savedRegistry[formData.email]) {
+        if (formData.password && savedRegistry[formData.email].password === formData.password) {
+          onComplete(savedRegistry[formData.email]);
+        } else if (!formData.password) {
+          setError('User found. Please enter your password.');
+        } else {
+          setError('Incorrect password for this account.');
+        }
+      } else {
+        setStep('details');
+      }
       setIsVerifying(false);
     }, 800);
   };
@@ -314,11 +330,17 @@ const Onboarding: React.FC<{ onComplete: (profile: UserProfile) => void }> = ({ 
   const handleDetailsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const finalTeam = formData.team === 'Others' ? formData.customTeam : formData.team;
-    if (!formData.name.trim() || !finalTeam) {
-      setError('All fields are required');
+    if (!formData.name.trim() || !finalTeam || !formData.password) {
+      setError('All fields including password are required');
       return;
     }
-    const profile: UserProfile = { name: formData.name, email: formData.email, team: finalTeam, hasSeenTour: false };
+    const profile: UserProfile = { 
+      name: formData.name, 
+      email: formData.email, 
+      team: finalTeam, 
+      password: formData.password, 
+      hasSeenTour: false 
+    };
     const savedRegistry = JSON.parse(localStorage.getItem('catalist_user_registry') || '{}');
     savedRegistry[formData.email] = profile;
     localStorage.setItem('catalist_user_registry', JSON.stringify(savedRegistry));
@@ -337,23 +359,35 @@ const Onboarding: React.FC<{ onComplete: (profile: UserProfile) => void }> = ({ 
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] mt-1">Enterprise SSO Gate</p>
           </div>
         </div>
-
         {step === 'email' ? (
           <form onSubmit={handleEmailSubmit} className="space-y-5">
-            <div className="relative">
-              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input 
-                type="email" 
-                required 
-                placeholder="Corporate Email" 
-                className="w-full bg-stone-50 border-2 border-stone-100 rounded-xl pl-11 pr-5 py-3.5 text-sm font-bold text-slate-950 focus:ring-4 focus:ring-stone-200/50 focus:border-slate-950 outline-none transition-all" 
-                value={formData.email} 
-                onChange={e => setFormData({...formData, email: e.target.value.toLowerCase()})} 
-              />
+            <div className="space-y-4">
+              <div className="relative">
+                <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="email" 
+                  required 
+                  placeholder="Corporate Email" 
+                  className="w-full bg-stone-50 border-2 border-stone-100 rounded-xl pl-11 pr-5 py-3.5 text-sm font-bold text-slate-950 focus:ring-4 focus:ring-stone-200/50 focus:border-slate-950 outline-none transition-all" 
+                  value={formData.email} 
+                  onChange={e => setFormData({...formData, email: e.target.value.toLowerCase()})} 
+                />
+              </div>
+              <div className="relative">
+                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="password" 
+                  required 
+                  placeholder="Access Password" 
+                  className="w-full bg-stone-50 border-2 border-stone-100 rounded-xl pl-11 pr-5 py-3.5 text-sm font-bold text-slate-950 focus:ring-4 focus:ring-stone-200/50 focus:border-slate-950 outline-none transition-all" 
+                  value={formData.password} 
+                  onChange={e => setFormData({...formData, password: e.target.value})} 
+                />
+              </div>
             </div>
             {error && <div className="p-3.5 bg-red-50 rounded-xl border border-red-100 text-[13px] font-bold flex items-center gap-2.5 text-red-600"><AlertCircle size={18} />{error}</div>}
             <button type="submit" disabled={isVerifying} className="w-full py-3.5 bg-slate-950 text-white rounded-xl font-black text-sm uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2.5">
-              {isVerifying ? <div className="loader w-5 h-5 border-2 border-white/20 border-t-white rounded-full"></div> : <>Verify SSO <ArrowRight size={18} /></>}
+              {isVerifying ? <div className="loader w-5 h-5 border-2 border-white/20 border-t-white rounded-full"></div> : <>Authenticate Access <ArrowRight size={18} /></>}
             </button>
           </form>
         ) : (
@@ -379,7 +413,7 @@ const Onboarding: React.FC<{ onComplete: (profile: UserProfile) => void }> = ({ 
               <option value="">Select Department</option>
               {teams.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <button type="submit" className="w-full py-3.5 bg-slate-950 text-white rounded-xl font-black text-sm uppercase tracking-widest hover:bg-black transition-all shadow-xl">Grant Access</button>
+            <button type="submit" className="w-full py-3.5 bg-slate-950 text-white rounded-xl font-black text-sm uppercase tracking-widest hover:bg-black transition-all shadow-xl">Complete Registration</button>
           </form>
         )}
       </div>
@@ -419,6 +453,84 @@ const QuickTour: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   );
 };
 
+const AboutPage: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
+  return (
+    <div className="min-h-screen bg-stone-50 p-8 lg:p-16 flex flex-col items-center justify-center antialiased overflow-y-auto">
+      <div className="max-w-5xl w-full space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+        <div className="text-center space-y-6">
+          <div className="w-24 h-24 bg-slate-950 rounded-[2rem] flex items-center justify-center text-white mx-auto shadow-2xl shadow-stone-200 ring-8 ring-white">
+            <SearchCode size={48} className="text-amber-500" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-5xl lg:text-7xl font-black text-slate-950 tracking-tighter uppercase leading-none">Catalist <span className="text-amber-600">PRO</span></h1>
+            <p className="text-slate-400 font-bold uppercase tracking-[0.3em] text-sm lg:text-lg">The Forensic Product Intelligence Matrix</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {[
+            { 
+              title: "Deep Forensic Extraction", 
+              desc: "Recursive attribute decomposition powered by Gemini models to extract granular technical specs from packshots and PDP signals.", 
+              icon: Zap, 
+              color: "text-amber-600" 
+            },
+            { 
+              title: "Enterprise Auditing", 
+              desc: "Standardized review across mission-critical categories including Technical, Legal, Regulatory, and SEO compliance nodes.", 
+              icon: Target, 
+              color: "text-slate-950" 
+            },
+            { 
+              title: "Grounding Integration", 
+              desc: "Live identity resolution using Google Search grounding to verify technical spec-sheets and exact product variants across the web.", 
+              icon: Globe, 
+              color: "text-amber-700" 
+            },
+            { 
+              title: "Persistent Registry", 
+              desc: "Enterprise-grade local persistence tied to corporate identity, maintaining mission data for up to 15 days of active audit.", 
+              icon: Database, 
+              color: "text-slate-800" 
+            },
+            { 
+              title: "High-Density Analytics", 
+              desc: "Real-time monitoring of extraction fidelity, data density, and vector counts to maintain catalogue integrity at scale.", 
+              icon: BarChart3, 
+              color: "text-emerald-700" 
+            },
+            { 
+              title: "Refinement Protocol", 
+              desc: "Direct-command refinement engine to deep-dive into specific micro-attributes or request compliance-level documentation details.", 
+              icon: Wand2, 
+              color: "text-amber-900" 
+            }
+          ].map((feature, i) => (
+            <div key={i} className="bg-white p-8 rounded-3xl border border-stone-200 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all group">
+              <div className={`w-12 h-12 rounded-xl bg-stone-50 flex items-center justify-center mb-6 shadow-inner border border-stone-100 ${feature.color}`}>
+                <feature.icon size={24} />
+              </div>
+              <h3 className="text-lg font-black text-slate-950 uppercase tracking-tight mb-2 group-hover:text-amber-700 transition-colors">{feature.title}</h3>
+              <p className="text-slate-500 font-medium leading-relaxed text-sm">{feature.desc}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-col items-center gap-6">
+          <button onClick={onLogin} className="px-12 py-5 bg-slate-950 text-white rounded-2xl font-black text-base uppercase tracking-widest shadow-2xl hover:bg-black transition-all hover:scale-105 flex items-center gap-3">
+            Authenticate Access <ArrowRight size={24} className="text-amber-500" />
+          </button>
+          <div className="flex items-center gap-4 text-[10px] font-black text-stone-400 uppercase tracking-widest opacity-60">
+            <span>Corporate Deployment v5.0.1</span>
+            <div className="w-1 h-1 bg-stone-300 rounded-full"></div>
+            <span>Restricted Internal Access Only</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Catalist = () => {
   const [activeTab, setActiveTab] = useState<'ingest' | 'review' | 'catalogue' | 'analytics'>('ingest');
   const [results, setResults] = useState<AnalysisResult[]>([]);
@@ -434,11 +546,11 @@ const Catalist = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  const [isAboutPage, setIsAboutPage] = useState(false); 
   const [refineQuery, setRefineQuery] = useState('');
   const [isRefining, setIsRefining] = useState(false);
   const [selectedRegistryItem, setSelectedRegistryItem] = useState<AnalysisResult | null>(null);
 
-  // History state for Refine Matrix (undo/redo)
   const [historyStack, setHistoryStack] = useState<AnalysisResult[][]>([]); 
   const [historyPointer, setHistoryPointer] = useState(-1);
   const [lastRefinementLog, setLastRefinementLog] = useState<string | null>(null);
@@ -449,15 +561,51 @@ const Catalist = () => {
       const parsedUser = JSON.parse(savedSession);
       setUser(parsedUser);
       if (parsedUser && parsedUser.hasSeenTour === false) setShowTour(true);
+      
+      const registryKey = `catalist_registry_${parsedUser.email}`;
+      const savedResults = JSON.parse(localStorage.getItem(registryKey) || '[]');
+      const filteredResults = savedResults.filter((res: AnalysisResult) => {
+        const ageInMs = Date.now() - (res.createdAt || 0);
+        return ageInMs < REGISTRY_EXPIRY_DAYS * MS_PER_DAY;
+      });
+      setResults(filteredResults);
+      localStorage.setItem(registryKey, JSON.stringify(filteredResults));
     }
     setInitialized(true);
   }, []);
 
+  useEffect(() => {
+    if (user && initialized) {
+      const registryKey = `catalist_registry_${user.email}`;
+      localStorage.setItem(registryKey, JSON.stringify(results));
+    }
+  }, [results, user, initialized]);
+
   const handleLoginComplete = (profile: UserProfile) => {
     const updatedUser = { ...profile, hasSeenTour: profile.hasSeenTour ?? false };
     setUser(updatedUser);
+    setIsAboutPage(false);
     localStorage.setItem('catalist_active_session', JSON.stringify(updatedUser));
+    
+    const registryKey = `catalist_registry_${profile.email}`;
+    const savedResults = JSON.parse(localStorage.getItem(registryKey) || '[]');
+    const filteredResults = savedResults.filter((res: AnalysisResult) => {
+      const ageInMs = Date.now() - (res.createdAt || 0);
+      return ageInMs < REGISTRY_EXPIRY_DAYS * MS_PER_DAY;
+    });
+    setResults(filteredResults);
+    
     if (!updatedUser.hasSeenTour) setShowTour(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('catalist_active_session');
+    setUser(null);
+    setIsAboutPage(true);
+    setResults([]);
+    setPendingBatch([]);
+    setHistoryStack([]);
+    setHistoryPointer(-1);
   };
 
   const completeTour = () => {
@@ -480,28 +628,45 @@ const Catalist = () => {
 
   const runExhaustiveCatalogueEngine = async (inputs: {data: string, type: 'image' | 'url' | 'text'}[], sourceName: string): Promise<AnalysisResult> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Act as an Enterprise Lead Catalogue Data Scientist. Analyze provided media inputs (images, URLs, text) to generate an ULTRA-DEEP, HYPER-GRANULAR catalogue object. Your goal is MAXIMAL INFORMATION DEPTH. 
-    1. Extract EVERY explicitly stated attribute from the source (specs, descriptions, ingredients, materials, dimensions, weights, certifications).
-    2. DERIVE further technical and marketing attributes by reasoning about the product type, materials, brand positioning, and target audience.
-    3. VISUAL REPRESENTATION (CRITICAL): If no high-quality source images are provided, use Google Search to find a stable, high-fidelity direct link to an official product image. Search for: "[Brand] [Product Name] official packshot". Provide this in 'fallbackImageUrl'. 
-    4. Also find the official high-resolution logo for the brand and provide it in 'brandLogoUrl'. 
-    5. Return 80+ distinct, high-fidelity data points Categorized into: Technical, Legal, Nutritional, Marketing, Logistics, Usage, Safety, Dimensions, Core, and SEO.`;
+    
+    const prompt = `Act as a Senior Lead Product Intelligence Specialist. Perform a MAXIMUM-DEPTH forensic catalogue extraction.
+
+CRITICAL MANDATE:
+Extract exhaustive, SKU-level precise technical data. You MUST populate EVERY relevant category with high-density attributes. 
+Aim for 30+ granular points for 'Technical Integrity' and 12-15 for others. DO NOT aggregate fields; keep them atomic.
+
+USE THESE EXACT KEYS FOR THE 'group' FIELD: Core, SEO, Technical, Legal, Dimensions, Nutritional, Logistics, Usage, Safety, Marketing.
+
+DESCRIPTIONS:
+- Core: Precise Model IDs, brand hierarchy, SKU variants, hex colors.
+- SEO: 30+ keywords, product utility notion, occasion relevance.
+- Technical: Chipsets, clock speeds, FAB (nm), display tech (LTPO/nit), storage types (UFS 4.0), sensor models, battery chemistry.
+- Legal: Certifications (FCC/CE/BIS), SAR, regulatory disclaimers, patent nodes.
+- Dimensions: Precise weights (g), measurements (mm), screen-to-body ratios.
+- Nutritional: (Food only) Precise ingredients list, full macro breakdown, allergens, shelf life nodes.
+- Logistics: HS Codes, palletization, stackability, storage conditions.
+- Usage: Maintenance protocols, setup guides, compatibility matrices.
+- Safety: IP ratings, impact standards (MIL-STD), electrical safety nodes.
+- Marketing: Brand USPs, visual identity stories, target personas.
+
+CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. If a category applies, fill it with rich, measurable units.`;
 
     const contents: any = {
       parts: [
         { text: prompt },
         ...inputs.map(input => {
           if (input.type === 'image') return { inlineData: { data: input.data.split(',')[1], mimeType: 'image/jpeg' } };
-          return { text: `Source Info (${input.type}): ${input.data}` };
+          return { text: `Product Signal (${input.type}): ${input.data}` };
         })
       ]
     };
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview', 
       contents,
       config: { 
         tools: [{ googleSearch: {} }],
+        thinkingConfig: { thinkingBudget: 24000 }, 
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -509,10 +674,22 @@ const Catalist = () => {
             coreInfo: { type: Type.OBJECT, properties: { displayName: { type: Type.STRING }, brand: { type: Type.STRING }, quantity: { type: Type.STRING }, color: { type: Type.STRING } }, required: ['displayName', 'brand', 'quantity', 'color'] },
             taxonomy: { type: Type.OBJECT, properties: { segment: { type: Type.STRING }, productType: { type: Type.STRING }, category: { type: Type.STRING }, subCategory: { type: Type.STRING } }, required: ['segment', 'productType', 'category', 'subCategory'] },
             seoInfo: { type: Type.OBJECT, properties: { keywords: { type: Type.ARRAY, items: { type: Type.STRING } }, tags: { type: Type.ARRAY, items: { type: Type.STRING } }, productNotion: { type: Type.STRING }, occasionRelevance: { type: Type.STRING } }, required: ['keywords', 'tags', 'productNotion', 'occasionRelevance'] },
-            attributes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, value: { type: Type.STRING }, confidence: { type: Type.NUMBER }, group: { type: Type.STRING } }, required: ['name', 'value', 'confidence', 'group'] } },
+            attributes: { 
+              type: Type.ARRAY, 
+              items: { 
+                type: Type.OBJECT, 
+                properties: { 
+                  name: { type: Type.STRING }, 
+                  value: { type: Type.STRING }, 
+                  confidence: { type: Type.NUMBER }, 
+                  group: { type: Type.STRING, description: "Must be exactly one of the requested keys." } 
+                }, 
+                required: ['name', 'value', 'confidence', 'group'] 
+              } 
+            },
             isFood: { type: Type.BOOLEAN },
-            fallbackImageUrl: { type: Type.STRING, description: 'Direct URL for a representative product image found via search.' },
-            brandLogoUrl: { type: Type.STRING, description: 'Direct URL for the official high-res brand logo.' },
+            fallbackImageUrl: { type: Type.STRING },
+            brandLogoUrl: { type: Type.STRING },
             insights: { type: Type.STRING },
             dataDensity: { type: Type.NUMBER },
             qualityScore: { type: Type.NUMBER }
@@ -523,36 +700,60 @@ const Catalist = () => {
     });
 
     const parsed = JSON.parse(response.text || '{}');
-    // Extract grounding sources as required by Gemini API guidelines
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     
+    // NORMALIZE layer to ensure UI mapping
+    const validGroups = CATALOGUE_SECTIONS.map(c => c.group);
+    const normalizedAttributes = (parsed.attributes || []).map((attr: any) => {
+      let g = attr.group || 'Technical';
+      const cleanG = String(g).trim();
+      
+      if (!validGroups.includes(cleanG as any)) {
+        const lowerG = cleanG.toLowerCase();
+        if (lowerG.includes('core')) g = 'Core';
+        else if (lowerG.includes('seo') || lowerG.includes('search')) g = 'SEO';
+        else if (lowerG.includes('tech')) g = 'Technical';
+        else if (lowerG.includes('legal') || lowerG.includes('regul') || lowerG.includes('complian')) g = 'Legal';
+        else if (lowerG.includes('dim') || lowerG.includes('physic') || lowerG.includes('scale')) g = 'Dimensions';
+        else if (lowerG.includes('nutri')) g = 'Nutritional';
+        else if (lowerG.includes('logis')) g = 'Logistics';
+        else if (lowerG.includes('usage') || lowerG.includes('appli')) g = 'Usage';
+        else if (lowerG.includes('safety')) g = 'Safety';
+        else if (lowerG.includes('market')) g = 'Marketing';
+        else g = 'Technical'; 
+      } else {
+        g = cleanG;
+      }
+      return { ...attr, group: g };
+    });
+
     return {
       id: Math.random().toString(36).substr(2, 9),
       taxonomy: parsed.taxonomy || { segment: 'N/A', productType: 'N/A', category: 'N/A', subCategory: 'N/A' },
-      coreInfo: parsed.coreInfo || { displayName: 'Unknown', brand: 'Unknown', quantity: 'N/A', color: 'N/A' },
+      coreInfo: parsed.coreInfo || { displayName: 'SKU Resolution Error', brand: 'Unknown', quantity: 'N/A', color: 'N/A' },
       seoInfo: parsed.seoInfo || { keywords: [], tags: [], productNotion: 'N/A', occasionRelevance: 'N/A' },
-      attributes: parsed.attributes || [],
+      attributes: normalizedAttributes,
       insights: parsed.insights || '',
-      dataDensity: (parsed.dataDensity || 0) * 100,
-      qualityScore: (parsed.qualityScore || 0) * 100,
+      dataDensity: (parsed.dataDensity || 0.5) * 100,
+      qualityScore: (parsed.qualityScore || 0.9) * 100,
       sourceType: 'composite',
       sourceValue: sourceName,
       isFood: parsed.isFood || false,
       fallbackImageUrl: parsed.fallbackImageUrl,
       brandLogoUrl: parsed.brandLogoUrl,
       groundingSources: groundingChunks,
-      status: 'completed'
+      status: 'completed',
+      createdAt: Date.now()
     };
   };
 
   const processBatch = async () => {
     setIsProcessing(true);
-    setProcessingStatus("Initializing batch...");
+    setProcessingStatus("Initializing forensic spec engine...");
     const batchResults: AnalysisResult[] = [];
-
     try {
       if (selectedFiles.length > 0 || pdpUrls.length > 0) {
-        setProcessingStatus("Processing composite product data...");
+        setProcessingStatus("Crawling manufacturer spec-sheets...");
         const compositeInputs: {data: string, type: 'image' | 'url' | 'text'}[] = [];
         const imageBase64s: string[] = [];
         for (const file of selectedFiles) {
@@ -565,27 +766,27 @@ const Catalist = () => {
         res.sourceImages = imageBase64s;
         batchResults.push(res);
       }
-
       if (csvFile) {
-        setProcessingStatus(`Parsing CSV batch...`);
+        setProcessingStatus(`Parsing batch signals...`);
         const text = await csvFile.text();
         const rows = parseCSV(text);
         for (let i = 0; i < Math.min(rows.length, 5); i++) {
-          setProcessingStatus(`Processing Batch Item ${i+1}...`);
+          setProcessingStatus(`Audit of SKU ${i+1}...`);
           const res = await runExhaustiveCatalogueEngine([{data: rows[i], type: 'text'}], `Row ${i+1}`);
           batchResults.push(res);
         }
       }
-
       if (batchResults.length > 0) {
-        setPendingBatch(batchResults);
-        pushToHistory(batchResults);
-        setCurrentReviewIdx(0);
+        const updatedPending = [...pendingBatch, ...batchResults];
+        const newIdx = pendingBatch.length; 
+        setPendingBatch(updatedPending);
+        pushToHistory(updatedPending);
+        setCurrentReviewIdx(newIdx);
         setActiveTab('review');
       }
     } catch (e) {
       console.error(e);
-      alert("Extraction engine failed.");
+      alert("Extraction engine interrupted. Check signals.");
     } finally {
       setIsProcessing(false);
       setSelectedFiles([]);
@@ -601,11 +802,12 @@ const Catalist = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Review and refine this product object to be even deeper and more exhaustive based on this request: "${query}". 
-        Extract any missing data and derive more nuanced technical details. 
-        Current state: ${JSON.stringify(pendingBatch[currentReviewIdx])}.`,
-        config: { responseMimeType: "application/json" }
+        model: 'gemini-3-pro-preview',
+        contents: `Refine this SKU data with forensic depth: "${query}". You MUST return attributes categorized into exactly: Core, SEO, Technical, Legal, Dimensions, Nutritional, Logistics, Usage, Safety, Marketing. State: ${JSON.stringify(pendingBatch[currentReviewIdx])}.`,
+        config: { 
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingBudget: 12000 }
+        }
       });
       const updated = JSON.parse(response.text || '{}');
       const newBatch = JSON.parse(JSON.stringify(pendingBatch));
@@ -614,9 +816,7 @@ const Catalist = () => {
       pushToHistory(newBatch);
       setLastRefinementLog(query);
       setRefineQuery('');
-    } catch (e) {
-      console.error(e);
-    } finally { setIsRefining(false); }
+    } catch (e) { console.error(e); } finally { setIsRefining(false); }
   };
 
   const handleUndo = () => {
@@ -637,7 +837,8 @@ const Catalist = () => {
 
   const commitToRegistry = () => {
     const committed = pendingBatch[currentReviewIdx];
-    setResults(prev => [committed, ...prev]);
+    const updatedCommitted = { ...committed, createdAt: Date.now() }; 
+    setResults(prev => [updatedCommitted, ...prev]);
     const newBatch = pendingBatch.filter((_, i) => i !== currentReviewIdx);
     setPendingBatch(newBatch);
     if (newBatch.length === 0) setActiveTab('catalogue');
@@ -652,33 +853,19 @@ const Catalist = () => {
     copyToClipboard(text);
   };
 
-  const attributeCategories = [
-    { title: 'Core DNA', group: 'Core', icon: Package, color: 'text-slate-950' },
-    { title: 'Market/SEO Discovery', group: 'SEO', icon: Sparkles, color: 'text-amber-600' },
-    { title: 'Technical Integrity', group: 'Technical', icon: Settings, color: 'text-slate-700' },
-    { title: 'Regulatory Compliance', group: 'Legal', icon: ShieldAlert, color: 'text-red-800' },
-    { title: 'Physical Scale', group: 'Dimensions', icon: Maximize2, color: 'text-stone-700' },
-    { title: 'Health & Nutri', group: 'Nutritional', icon: Scale, color: 'text-emerald-800' },
-    { title: 'Logistics/Flow', group: 'Logistics', icon: Truck, color: 'text-slate-900' },
-    { title: 'Application', group: 'Usage', icon: Clock, color: 'text-amber-800' },
-    { title: 'Safety Protocol', group: 'Safety', icon: ShieldCheck, color: 'text-emerald-900' },
-    { title: 'Market Positioning', group: 'Marketing', icon: TrendingUp, color: 'text-stone-500' }
-  ];
-
   if (!initialized) return null;
+  if (isAboutPage) return <AboutPage onLogin={() => setIsAboutPage(false)} />;
   if (!user) return <Onboarding onComplete={handleLoginComplete} />;
 
   const currentEntity = pendingBatch[currentReviewIdx];
 
   return (
     <div className="flex h-screen bg-stone-50 text-slate-950 font-sans antialiased overflow-hidden">
-      {/* SIDEBAR NAVIGATION */}
       <aside className="w-16 lg:w-52 border-r border-stone-200 bg-white flex flex-col p-4 z-50 transition-all shrink-0 shadow-sm">
         <div className="flex items-center gap-3 mb-6 px-1">
           <div className="w-8 h-8 bg-slate-950 rounded-lg flex items-center justify-center text-white shrink-0 shadow-xl shadow-stone-100"><SearchCode size={18} className="text-amber-500" /></div>
           <h1 className="hidden lg:block text-lg font-black tracking-tighter text-slate-950 uppercase">Cata<span className="text-amber-600">list</span></h1>
         </div>
-
         <nav className="flex-1 space-y-1">
           {[
             { id: 'ingest', icon: Plus, label: 'Ingest Hub' },
@@ -686,21 +873,13 @@ const Catalist = () => {
             { id: 'catalogue', icon: Database, label: 'Registry', count: results.length },
             { id: 'analytics', icon: BarChart3, label: 'Insights' }
           ].map((item: any) => (
-            <button 
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              disabled={item.id === 'review' && !pendingBatch.length}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                activeTab === item.id ? 'bg-slate-950 text-white shadow-lg' : 'text-slate-500 hover:bg-stone-50 disabled:opacity-20'
-              }`}
-            >
+            <button key={item.id} onClick={() => setActiveTab(item.id)} disabled={item.id === 'review' && !pendingBatch.length} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === item.id ? 'bg-slate-950 text-white shadow-lg' : 'text-slate-500 hover:bg-stone-50 disabled:opacity-20'}`}>
               <item.icon size={18} className={activeTab === item.id ? 'text-amber-500' : ''} />
               <span className="hidden lg:block">{item.label}</span>
               {item.count !== undefined && item.count > 0 && <span className="hidden lg:block ml-auto px-1 py-0.5 rounded-md text-[9px] font-black bg-stone-100 text-slate-500 shadow-inner">{item.count}</span>}
             </button>
           ))}
         </nav>
-
         <div className="mt-auto pt-4 border-t border-stone-100 space-y-1.5">
           <button onClick={() => setShowTour(true)} className="hidden lg:flex w-full items-center gap-3 px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-400 hover:text-amber-700 hover:bg-stone-50 transition-all"><HelpCircle size={16} /> Help</button>
           <div className="flex items-center gap-2 p-2 bg-stone-100/50 rounded-lg border border-stone-200">
@@ -709,63 +888,49 @@ const Catalist = () => {
               <p className="text-[10px] font-black text-slate-950 truncate uppercase tracking-tight">{user.name}</p>
               <p className="text-[8px] text-amber-700 font-bold truncate uppercase tracking-tight">{user.team}</p>
             </div>
-            <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="hidden lg:block text-slate-300 hover:text-red-700 transition-colors"><LogOut size={14} /></button>
+            <button onClick={handleLogout} className="hidden lg:block text-slate-300 hover:text-red-700 transition-colors"><LogOut size={14} /></button>
           </div>
         </div>
       </aside>
 
-      {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col relative overflow-hidden">
         {showTour && <QuickTour onComplete={completeTour} />}
-
-        {/* INGEST HUB */}
         {activeTab === 'ingest' && (
           <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-8">
             <div className="max-w-4xl mx-auto space-y-6 py-6 animate-in fade-in duration-700">
               <div className="text-center space-y-2">
                 <h2 className="text-3xl lg:text-4xl font-black text-slate-950 tracking-tighter uppercase">Ingest Hub</h2>
-                <p className="text-slate-500 text-sm lg:text-base font-medium">Capture product signals for automated high-fidelity extraction.</p>
+                <p className="text-slate-500 text-sm lg:text-base font-medium">Capture product signals for forensic-level technical extraction.</p>
               </div>
-
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <div className="space-y-4">
                   <div className="relative bg-white rounded-2xl border-2 border-dashed border-stone-200 p-8 lg:p-10 hover:border-amber-600 hover:bg-amber-50/20 transition-all group cursor-pointer text-center shadow-sm">
                     <input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setSelectedFiles([...selectedFiles, ...Array.from(e.target.files || [])])} />
                     <div className="w-12 h-12 bg-stone-50 text-slate-950 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-xl shadow-stone-200 group-hover:scale-110 transition-transform"><ImageIcon size={24} className="group-hover:text-amber-600 transition-colors" /></div>
-                    <h3 className="text-base lg:text-lg font-black text-slate-900 uppercase tracking-tight">Visual Signals</h3>
-                    <p className="text-slate-400 text-[10px] mt-1 font-medium">Packshot Images</p>
+                    <h3 className="text-base lg:text-lg font-black text-slate-900 uppercase tracking-tight">Packshot Signals</h3>
+                    <p className="text-slate-400 text-[10px] mt-1 font-medium">Visual Assets / Local Media</p>
                   </div>
-                  
                   <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Digital References</h4>
+                      <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Digital Reference</h4>
                       <LinkIcon size={16} className="text-stone-300" />
                     </div>
                     <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        placeholder="Paste PDP URL..." 
-                        className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-950 outline-none focus:border-amber-600 transition-all shadow-inner" 
-                        value={urlInput} 
-                        onChange={(e) => setUrlInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && (urlInput.trim() && setPdpUrls([...pdpUrls, urlInput.trim()]), setUrlInput(''))}
-                      />
+                      <input type="text" placeholder="Amazon, Flipkart or Official SKU URL..." className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-950 outline-none focus:border-amber-600 transition-all shadow-inner" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (urlInput.trim() && setPdpUrls([...pdpUrls, urlInput.trim()]), setUrlInput(''))} />
                       <button onClick={() => (urlInput.trim() && setPdpUrls([...pdpUrls, urlInput.trim()]), setUrlInput(''))} className="p-2.5 bg-slate-950 text-white rounded-lg hover:bg-black transition-all active:scale-95"><Plus size={20} className="text-amber-500" /></button>
                     </div>
                   </div>
                 </div>
-
                 <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm flex flex-col h-full min-h-[300px]">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Composite Stage</h4>
                     <span className="text-[9px] font-black text-amber-700 bg-amber-50 px-2 py-1 rounded-lg shadow-sm border border-amber-100">{selectedFiles.length + pdpUrls.length} Sources Linked</span>
                   </div>
-                  
                   <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1">
                     {selectedFiles.length === 0 && pdpUrls.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-stone-300 italic space-y-2">
                         <Layers size={32} strokeWidth={1} />
-                        <p className="text-xs font-medium">Queue is empty.</p>
+                        <p className="text-xs font-medium">Signal queue idle.</p>
                       </div>
                     ) : (
                       <>
@@ -790,187 +955,153 @@ const Catalist = () => {
                       </>
                     )}
                   </div>
-                  
                   <button onClick={processBatch} disabled={isProcessing || (selectedFiles.length === 0 && pdpUrls.length === 0)} className="mt-4 w-full py-3 bg-slate-950 text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-stone-200 disabled:bg-stone-200 transition-all hover:bg-black active:scale-[0.98]">
-                    <Zap size={20} className="text-amber-500" fill="currentColor" /> <span>Launch Extraction</span>
+                    <Zap size={20} className="text-amber-500" fill="currentColor" /> <span>Begin Forensic Extraction</span>
                   </button>
                 </div>
               </div>
             </div>
           </div>
         )}
-
-        {/* PROCESSING OVERLAY */}
         {isProcessing && (
           <div className="absolute inset-0 z-[100] bg-slate-950/40 backdrop-blur-md flex items-center justify-center animate-in fade-in">
              <div className="bg-white p-8 rounded-[2rem] max-w-sm w-full text-center space-y-4 shadow-2xl border border-stone-200">
                 <div className="w-12 h-12 border-4 border-stone-100 border-t-amber-600 rounded-full animate-spin mx-auto shadow-lg"></div>
                 <div className="space-y-2">
-                  <h3 className="text-lg font-black text-slate-950 uppercase tracking-tighter">Parsing Metadata</h3>
+                  <h3 className="text-lg font-black text-slate-950 uppercase tracking-tighter">Forensic Audit Active</h3>
                   <div className="px-4 py-2 bg-slate-950 rounded-lg shadow-xl"><p className="text-amber-500 font-bold text-[11px] tracking-wide animate-pulse">{processingStatus}</p></div>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.2em]">Assembling comprehensive technical matrix...</p>
                 </div>
              </div>
           </div>
         )}
-
-        {/* AUDIT WORKSPACE */}
         {activeTab === 'review' && currentEntity && (
           <div className="flex-1 flex overflow-hidden animate-in fade-in duration-500">
-            {/* Left Queue */}
-            <div className="w-52 lg:w-56 border-r border-stone-200 bg-white flex flex-col p-3 shrink-0 overflow-y-auto custom-scrollbar shadow-sm z-10">
-              <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><ListFilter size={16} className="text-amber-600"/> Active Queue</h5>
-              <div className="space-y-1.5">
-                {pendingBatch.map((p, idx) => (
-                  <button key={p.id} onClick={() => setCurrentReviewIdx(idx)} className={`w-full text-left p-2.5 rounded-lg border transition-all flex items-center gap-2.5 ${currentReviewIdx === idx ? 'bg-amber-50 border-amber-600 shadow-sm shadow-stone-200/30' : 'bg-white border-transparent hover:bg-stone-50'}`}>
-                    <div className={`w-6 h-6 rounded shrink-0 flex items-center justify-center text-[9px] font-black ${currentReviewIdx === idx ? 'bg-slate-950 text-white shadow-md' : 'bg-stone-100 text-stone-400 shadow-inner'}`}>{idx + 1}</div>
-                    <div className="min-w-0 flex-1">
-                      <p className={`text-[11px] font-black truncate ${currentReviewIdx === idx ? 'text-slate-950' : 'text-slate-700'}`}>{p.coreInfo.displayName}</p>
-                      <p className="text-[8px] font-bold text-slate-400 truncate uppercase tracking-widest">{p.taxonomy.category}</p>
+            <div className="flex-1 flex flex-col min-w-0 bg-stone-50/50">
+               <div className="sticky top-0 bg-stone-50/80 backdrop-blur-md z-10 p-4 lg:p-6 pb-4 border-b border-stone-200/40 flex flex-col gap-4 shadow-sm shrink-0">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <h2 className="text-lg font-black text-slate-950 tracking-tighter uppercase flex items-center gap-2">
+                        <Target className="text-amber-600" size={24} /> 
+                        Audit Workspace
+                      </h2>
+                      <p className="text-slate-400 font-bold text-[9px] uppercase tracking-widest leading-none">
+                        Reviewing {currentReviewIdx + 1} of {pendingBatch.length} items • Full Forensic Decomposition
+                      </p>
                     </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Matrix View */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-6 space-y-5 bg-stone-50/50">
-               <div className="flex items-center justify-between sticky top-0 bg-stone-50/80 backdrop-blur-md z-10 py-3 -mt-3 border-b border-stone-200/20">
-                  <div className="space-y-0.5">
-                    <h2 className="text-lg font-black text-slate-950 tracking-tighter uppercase flex items-center gap-2"><Target className="text-amber-600" size={24} /> Audit Workspace</h2>
-                    <p className="text-slate-400 font-bold text-[9px] uppercase tracking-widest">Reviewing {currentReviewIdx + 1} of {pendingBatch.length}</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => exportSingleToCSV(currentEntity)} className="px-3 py-1.5 bg-white border border-stone-200 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest hover:text-amber-700 transition-all shadow-sm flex items-center gap-1.5"><Download size={12} /> Export</button>
+                      <button onClick={() => setPendingBatch(pendingBatch.filter((_, i) => i !== currentReviewIdx))} className="px-3 py-1.5 bg-white border border-stone-200 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest hover:text-red-700 transition-all shadow-sm">Discard</button>
+                      <button onClick={commitToRegistry} className="px-4 py-1.5 bg-slate-950 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-xl shadow-stone-200 hover:bg-black transition-all flex items-center gap-1.5"><CheckCircle2 size={14} className="text-amber-500" /> Finalize</button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => exportSingleToCSV(currentEntity)} className="px-3 py-1.5 bg-white border border-stone-200 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest hover:text-amber-700 transition-all shadow-sm flex items-center gap-1.5"><Download size={12} /> Export</button>
-                    <button onClick={() => setPendingBatch(pendingBatch.filter((_, i) => i !== currentReviewIdx))} className="px-3 py-1.5 bg-white border border-stone-200 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest hover:text-red-700 transition-all shadow-sm">Discard</button>
-                    <button onClick={commitToRegistry} className="px-4 py-1.5 bg-slate-950 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-xl shadow-stone-200 hover:bg-black transition-all flex items-center gap-1.5"><CheckCircle2 size={14} className="text-amber-500" /> Finalize</button>
+
+                  <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar py-1">
+                    <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1.5 bg-stone-200/50 rounded-full border border-stone-300/50 shadow-inner">
+                      <ListFilter size={14} className="text-amber-700" />
+                      <span className="text-[9px] font-black uppercase text-slate-500 tracking-tighter leading-none">Active Queue</span>
+                    </div>
+                    <div className="h-4 w-[1px] bg-stone-300 shrink-0" />
+                    <div className="flex items-center gap-2 pr-10">
+                      {pendingBatch.map((p, idx) => (
+                        <button 
+                          key={p.id} 
+                          onClick={() => setCurrentReviewIdx(idx)}
+                          className={`h-8 px-4 rounded-full flex items-center gap-2.5 transition-all border shrink-0 ${
+                            currentReviewIdx === idx 
+                              ? 'bg-slate-950 text-white border-slate-950 shadow-lg shadow-slate-900/20 ring-2 ring-amber-500/20' 
+                              : 'bg-white border-stone-200 text-slate-400 hover:border-amber-400 hover:text-slate-700 hover:bg-stone-50 shadow-sm'
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${currentReviewIdx === idx ? 'bg-amber-500 text-slate-950' : 'bg-stone-100 text-slate-400'}`}>
+                            {idx + 1}
+                          </div>
+                          <span className="text-[10px] font-bold truncate max-w-[160px]">{p.coreInfo.displayName}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                </div>
 
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {attributeCategories.map(section => {
-                    const sectionAttrs = currentEntity.attributes.filter(a => a.group === section.group);
-                    if (sectionAttrs.length === 0 && section.group !== 'SEO') return null;
-                    return (
-                      <div key={section.group} className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-sm flex flex-col max-h-[300px]">
-                        <div className="flex items-center justify-between mb-2.5 shrink-0">
-                          <div className="flex items-center gap-2">
-                            <section.icon size={16} className={section.color} />
-                            <h5 className="text-[8px] font-black uppercase tracking-widest text-slate-800">{section.title}</h5>
-                          </div>
-                          <div className="flex items-center gap-1">
-                             <button onClick={() => handleCopySection(section.group, currentEntity.attributes)} className="p-0.5 text-stone-300 hover:text-amber-700 transition-all" title="Copy Section"><Copy size={10} /></button>
-                             <span className="text-[7px] font-black text-slate-400 bg-stone-50 px-1 py-0.5 rounded shadow-inner border border-stone-100">{sectionAttrs.length} Pt</span>
-                          </div>
-                        </div>
-                        {section.group === 'SEO' && (
-                          <div className="p-2 bg-stone-50 rounded-lg border border-stone-100 space-y-1.5 mb-2 shrink-0 shadow-inner">
-                            <p className="text-[10px] font-bold text-slate-600 leading-tight italic">"{currentEntity.seoInfo.productNotion}"</p>
-                            <div className="flex flex-wrap gap-1">
-                              {[...currentEntity.seoInfo.keywords, ...currentEntity.seoInfo.tags].slice(0, 4).map((buzz, i) => (
-                                <span key={i} className="px-1 py-0.5 bg-white border border-stone-200 text-[7px] font-black text-amber-700 rounded">#{buzz.toLowerCase()}</span>
-                              ))}
+               <div className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-6 pb-20">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-max">
+                    {CATALOGUE_SECTIONS
+                      .filter(section => currentEntity.attributes.some(a => String(a.group).toLowerCase() === section.group.toLowerCase()))
+                      .map(section => {
+                        const sectionAttrs = currentEntity.attributes.filter(a => String(a.group).toLowerCase() === section.group.toLowerCase());
+                        return (
+                          <div key={section.group} className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex flex-col h-[480px] animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex items-center justify-between mb-3 shrink-0">
+                              <div className="flex items-center gap-2">
+                                <section.icon size={16} className={section.color} />
+                                <h5 className="text-[9px] font-black uppercase tracking-widest text-slate-800 leading-none">{section.title}</h5>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                 <button onClick={() => handleCopySection(section.group, currentEntity.attributes)} className="p-0.5 text-stone-300 hover:text-amber-700 transition-all" title="Copy Section"><Copy size={12} /></button>
+                                 <span className="text-[9px] font-black px-2 py-0.5 rounded leading-none text-emerald-700 bg-emerald-50">
+                                   {sectionAttrs.length} Points
+                                 </span>
+                              </div>
+                            </div>
+                            {section.group === 'SEO' && (
+                              <div className="p-2 bg-stone-50 rounded-xl border border-stone-100 space-y-1.5 mb-3 shrink-0 shadow-inner">
+                                <p className="text-[10px] font-bold text-slate-600 leading-tight italic line-clamp-2">"{currentEntity.seoInfo.productNotion}"</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {currentEntity.seoInfo.keywords.slice(0, 10).map((buzz, i) => (
+                                    <span key={i} className="px-1 py-0.5 bg-white border border-stone-200 text-[7px] font-black text-amber-700 rounded uppercase">#{buzz}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex flex-col gap-2 overflow-y-auto custom-scrollbar pr-1 flex-1 pb-2">
+                              {sectionAttrs.map((attr, i) => <AttributeCard key={i} attr={attr} />)}
                             </div>
                           </div>
-                        )}
-                        <div className="grid grid-cols-1 gap-1 overflow-y-auto custom-scrollbar pr-1 flex-1 pb-1">
-                          {sectionAttrs.map((attr, i) => <AttributeCard key={i} attr={attr} />)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  
-                  {/* Verification Sources with Grounding */}
-                  {currentEntity.groundingSources && currentEntity.groundingSources.length > 0 && (
-                    <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-sm flex flex-col max-h-[300px]">
-                      <div className="flex items-center justify-between mb-2.5 shrink-0">
-                        <div className="flex items-center gap-2">
-                          <Globe size={16} className="text-amber-600" />
-                          <h5 className="text-[8px] font-black uppercase tracking-widest text-slate-800">Verification Sources</h5>
-                        </div>
-                      </div>
-                      <div className="overflow-y-auto custom-scrollbar pr-1 flex-1 space-y-1.5">
-                        {currentEntity.groundingSources.map((chunk: any, i: number) => (
-                          chunk.web && (
-                            <a key={i} href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="block p-2 bg-stone-50 border border-stone-100 rounded-lg hover:border-amber-300 transition-all group">
-                              <div className="flex items-center justify-between mb-0.5">
-                                <span className="text-[8px] font-bold text-slate-400 uppercase">Search Node {i+1}</span>
-                                <ExternalLink size={8} className="text-stone-300 group-hover:text-amber-600" />
-                              </div>
-                              <p className="text-[10px] font-semibold text-slate-800 leading-tight truncate">{chunk.web.title || chunk.web.uri}</p>
-                            </a>
-                          )
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                        );
+                    })}
+                  </div>
                </div>
             </div>
 
-            {/* Right side Detail panel */}
             <div className="w-64 lg:w-72 border-l border-stone-200 bg-white flex flex-col shrink-0 overflow-y-auto custom-scrollbar shadow-sm z-10">
-               {/* Image Viewer Component with Fallbacks */}
-               <div className="p-5 border-b border-stone-50 space-y-4 bg-white z-20">
+               <div className="p-4 border-b border-stone-50 space-y-3 bg-white z-20">
                   <ProductImageViewer result={currentEntity} />
-                  
-                  <div className="text-center space-y-1 px-1">
-                    <span className="text-[8px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-0.5 rounded-lg tracking-widest border border-amber-100/50">{currentEntity.taxonomy.category}</span>
-                    <h3 className="text-sm font-black text-slate-950 leading-tight uppercase tracking-tight line-clamp-2">{currentEntity.coreInfo.displayName}</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-80">{currentEntity.coreInfo.brand}</p>
+                  <div className="text-center space-y-0.5 px-1">
+                    <span className="text-[7px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-0.5 rounded-lg tracking-widest border border-amber-100/50 leading-none">{currentEntity.taxonomy.category}</span>
+                    <h3 className="text-xs font-black text-slate-950 leading-tight uppercase tracking-tight line-clamp-2">{currentEntity.coreInfo.displayName}</h3>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest opacity-80 leading-none">{currentEntity.coreInfo.brand}</p>
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 py-3 border-y border-stone-100/60">
+                  <div className="grid grid-cols-2 gap-2 py-2 border-y border-stone-100/60">
                     <div className="text-center border-r border-stone-100">
-                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Fidelity</p>
-                      <p className="text-xl font-black text-emerald-700 tabular-nums">{Math.round(currentEntity.qualityScore)}%</p>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 leading-none">Vectors</p>
+                      <p className="text-lg font-black text-amber-700 tabular-nums leading-none">{currentEntity.attributes.length}</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Vector</p>
-                      <p className="text-xl font-black text-slate-950 tabular-nums">{currentEntity.attributes.length}</p>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 leading-none">Fidelity</p>
+                      <p className="text-lg font-black text-slate-950 tabular-nums leading-none">{Math.round(currentEntity.qualityScore)}%</p>
                     </div>
                   </div>
                </div>
-
-               {/* Scrollable Refine Matrix Content - Fixed bottom padding to prevent cut off by footer */}
-               <div className="p-5 pb-24 bg-stone-50/10">
+               <div className="p-4 pb-32">
                   <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center justify-between px-1 shrink-0">
                       <div className="flex items-center gap-2">
                         <Wand2 size={16} className="text-amber-600" />
                         <h5 className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Refine Matrix</h5>
                       </div>
-                      <div className="flex items-center gap-1 px-1.5 py-0.5 bg-stone-100 rounded-lg border border-stone-200 shadow-sm">
-                        <span className="text-[7px] font-black text-slate-950 uppercase tracking-tighter">AI Active</span>
-                      </div>
                     </div>
-                    <div className="group relative bg-white ring-1 ring-stone-200 hover:ring-amber-300 focus-within:ring-slate-950 rounded-xl p-3 space-y-2.5 shadow-sm transition-all duration-300 bg-gradient-to-br from-white to-stone-100/20">
-                      <div className="flex items-center justify-between border-b border-stone-100 pb-1.5 mb-0.5">
-                         <p className="text-[8px] font-black text-stone-300 uppercase tracking-widest">Context Engine</p>
+                    <div className="group relative bg-white ring-1 ring-stone-200 hover:ring-amber-300 focus-within:ring-slate-950 rounded-xl p-3 space-y-2.5 shadow-sm transition-all duration-300">
+                      <div className="flex items-center justify-between border-b border-stone-100 pb-1.5 mb-0.5 shrink-0">
+                         <p className="text-[8px] font-black text-stone-300 uppercase tracking-widest leading-none">Command node</p>
                          <div className="flex gap-1">
                             <button onClick={handleUndo} disabled={historyPointer <= 0} className="p-0.5 text-stone-400 hover:text-amber-700 disabled:opacity-30 transition-colors"><Undo2 size={12} /></button>
                             <button onClick={handleRedo} disabled={historyPointer >= historyStack.length - 1} className="p-0.5 text-stone-400 hover:text-amber-700 disabled:opacity-30 transition-colors"><Redo2 size={12} /></button>
                          </div>
                       </div>
-                      <textarea 
-                        rows={3} 
-                        placeholder="Refinement logic..." 
-                        className="w-full bg-transparent border-none outline-none text-[11px] font-semibold text-slate-900 placeholder:text-stone-300 resize-none leading-normal" 
-                        value={refineQuery} 
-                        onChange={(e) => setRefineQuery(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), refineEntity())}
-                      />
-                      {lastRefinementLog && (
-                        <div className="p-1.5 bg-amber-50 rounded-lg border border-amber-100/30 flex items-start gap-1.5 animate-in slide-in-from-top-1">
-                           <CheckCircle2 size={8} className="text-amber-700 mt-0.5" />
-                           <p className="text-[8px] font-bold text-amber-900 leading-tight italic truncate">Last: "{lastRefinementLog}"</p>
-                        </div>
-                      )}
-                      <div className="flex justify-end pt-0.5">
-                        <button 
-                          onClick={refineEntity} 
-                          disabled={isRefining || !refineQuery.trim()} 
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-black shadow transition-all active:scale-95"
-                        >
-                          {isRefining ? <RefreshCw className="animate-spin" size={12} /> : <Send size={12} className="text-amber-500" />} Refine
+                      <textarea rows={4} placeholder="Request deeper forensic analysis or specific technical nodes..." className="w-full bg-transparent border-none outline-none text-[11px] font-semibold text-slate-900 placeholder:text-stone-300 resize-none leading-tight" value={refineQuery} onChange={(e) => setRefineQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), refineEntity())} />
+                      <div className="flex justify-end pt-1 shrink-0">
+                        <button onClick={refineEntity} disabled={isRefining || !refineQuery.trim()} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all">
+                          {isRefining ? <RefreshCw className="animate-spin" size={12} /> : <Send size={12} className="text-amber-500" />} Launch Audit
                         </button>
                       </div>
                     </div>
@@ -979,23 +1110,20 @@ const Catalist = () => {
             </div>
           </div>
         )}
-
-        {/* REGISTRY VIEW */}
         {activeTab === 'catalogue' && (
           <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-8 space-y-8 animate-in fade-in duration-500 pb-20">
             <div className="flex items-center justify-between border-b border-stone-200 pb-5">
               <h2 className="text-2xl font-black text-slate-950 tracking-tighter uppercase">Master Registry</h2>
               <div className="flex gap-3">
                 <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" /><input type="text" placeholder="Lookup..." className="bg-white border border-stone-200 rounded-xl pl-8 pr-4 py-2 text-xs font-bold w-56 outline-none focus:border-amber-600 shadow-sm" /></div>
-                <button onClick={() => exportRegistryToCSV(results)} className="flex items-center gap-1.5 px-5 py-2 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-black transition-all hover:translate-y-[-1px]"><Download size={14} className="text-amber-500" /> Export</button>
+                <button onClick={() => exportRegistryToCSV(results)} className="flex items-center gap-1.5 px-5 py-2 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-black transition-all hover:translate-y-[-1px]"><Download size={14} className="text-amber-500" /> Export All</button>
               </div>
             </div>
-
             {results.length === 0 ? (
               <div className="py-20 text-center space-y-4 bg-white rounded-3xl border border-stone-200 max-w-2xl mx-auto shadow-sm">
                 <Sparkles size={48} className="text-stone-100 mx-auto" strokeWidth={1} />
                 <p className="text-slate-400 font-black text-base uppercase tracking-widest">Registry Offline</p>
-                <button onClick={() => setActiveTab('ingest')} className="px-6 py-2.5 bg-slate-950 text-white rounded-lg font-black text-[11px] uppercase tracking-widest shadow-xl hover:bg-black border border-amber-600/20">Initialize Ingest</button>
+                <button onClick={() => setActiveTab('ingest')} className="px-6 py-2.5 bg-slate-950 text-white rounded-lg font-black text-[11px] uppercase tracking-widest shadow-xl hover:bg-black border border-amber-600/20">Initialize Audit</button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -1020,8 +1148,6 @@ const Catalist = () => {
                 ))}
               </div>
             )}
-
-            {/* DETAIL OVERLAY */}
             {selectedRegistryItem && (
               <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-300">
                 <div className="bg-white w-full max-w-[94%] h-full rounded-[2rem] shadow-2xl flex flex-col overflow-hidden relative border border-white/50">
@@ -1032,100 +1158,58 @@ const Catalist = () => {
                       </div>
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-[9px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-1 rounded-lg tracking-widest border border-amber-100/50">{selectedRegistryItem.taxonomy.category}</span>
-                          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest bg-stone-50 px-2 py-1 rounded-lg border border-stone-200">{selectedRegistryItem.taxonomy.segment}</span>
+                          <span className="text-[9px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-1 rounded-lg tracking-widest border border-amber-100/50 leading-none">{selectedRegistryItem.taxonomy.category}</span>
+                          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest bg-stone-50 px-2 py-1 rounded-lg border border-stone-200 leading-none">{selectedRegistryItem.taxonomy.segment}</span>
                         </div>
                         <h2 className="text-2xl font-black text-slate-950 tracking-tighter uppercase leading-none">{selectedRegistryItem.coreInfo.displayName}</h2>
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em]">{selectedRegistryItem.coreInfo.brand} • Entity: {selectedRegistryItem.id.toUpperCase()}</p>
                       </div>
                     </div>
-                    <button onClick={() => setSelectedRegistryItem(null)} className="p-3 bg-stone-50 text-stone-400 rounded-xl hover:bg-red-50 hover:text-red-700 transition-all active:scale-95 shadow-inner">
-                      <X size={24} />
-                    </button>
+                    <button onClick={() => setSelectedRegistryItem(null)} className="p-3 bg-stone-50 text-stone-400 rounded-xl hover:bg-red-50 hover:text-red-700 transition-all active:scale-95 shadow-inner"><X size={24} /></button>
                   </div>
-
                   <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-8 bg-stone-50/50">
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
-                        {attributeCategories.map(section => {
-                          const sectionAttrs = selectedRegistryItem.attributes.filter(a => a.group === section.group);
-                          if (sectionAttrs.length === 0 && section.group !== 'SEO') return null;
-                          return (
-                            <div key={section.group} className="bg-white p-4 lg:p-5 rounded-2xl border border-stone-200 shadow shadow-stone-200/50 flex flex-col h-[320px] lg:h-[350px] transition-all hover:scale-[1.01]">
-                              <div className="flex items-center justify-between border-b border-stone-50 pb-3 mb-3 shrink-0">
-                                <div className="flex items-center gap-2">
-                                  <section.icon size={18} className={section.color} />
-                                  <h5 className="text-[9px] font-black uppercase tracking-widest text-slate-800">{section.title}</h5>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                   <button onClick={() => handleCopySection(section.group, selectedRegistryItem.attributes)} className="p-1 text-stone-300 hover:text-amber-700 transition-all" title="Copy Section"><Copy size={12} /></button>
-                                   <span className="text-[8px] font-black text-slate-500 bg-stone-50 px-1.5 py-0.5 rounded shadow-inner border border-stone-100">{sectionAttrs.length} Pt</span>
-                                </div>
-                              </div>
-                              {section.group === 'SEO' && (
-                                <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-3 mb-3 shrink-0 shadow-inner overflow-hidden">
-                                  <p className="text-[10px] font-bold text-slate-600 leading-tight italic border-b border-stone-100 pb-2 mb-2">"{selectedRegistryItem.seoInfo.productNotion}"</p>
-                                  <div className="space-y-1">
-                                    <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Keywords</p>
-                                    <div className="flex flex-wrap gap-1">
-                                      {[...selectedRegistryItem.seoInfo.keywords, ...selectedRegistryItem.seoInfo.tags].map((buzz, i) => (
-                                        <span key={i} className="px-2 py-0.5 bg-white border border-stone-200 text-[8px] font-black text-amber-700 rounded">#{buzz.toLowerCase()}</span>
-                                      ))}
-                                    </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 auto-rows-max">
+                        {CATALOGUE_SECTIONS
+                          .filter(section => selectedRegistryItem.attributes.some(a => String(a.group).toLowerCase() === section.group.toLowerCase()))
+                          .map(section => {
+                            const sectionAttrs = selectedRegistryItem.attributes.filter(a => String(a.group).toLowerCase() === section.group.toLowerCase());
+                            return (
+                              <div key={section.group} className="bg-white p-5 lg:p-6 rounded-2xl border border-stone-200 shadow-sm flex flex-col h-[480px]">
+                                <div className="flex items-center justify-between border-b border-stone-50 pb-4 mb-4 shrink-0">
+                                  <div className="flex items-center gap-3">
+                                    <section.icon size={18} className={section.color} />
+                                    <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-800 leading-none">{section.title}</h5>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                     <button onClick={() => handleCopySection(section.group, selectedRegistryItem.attributes)} className="p-1 text-stone-300 hover:text-amber-700 transition-all" title="Copy Section"><Copy size={12} /></button>
+                                     <span className="text-[9px] font-black text-slate-500 bg-stone-50 px-2 py-0.5 rounded shadow-inner border border-stone-100 leading-none">{sectionAttrs.length} Pt</span>
                                   </div>
                                 </div>
-                              )}
-                              <div className="grid grid-cols-1 gap-1.5 overflow-y-auto custom-scrollbar pr-2 flex-1 pb-2">
-                                {sectionAttrs.map((attr, i) => <AttributeCard key={i} attr={attr} />)}
+                                <div className="flex flex-col gap-2 overflow-y-auto custom-scrollbar pr-2 flex-1 pb-2">
+                                  {sectionAttrs.map((attr, i) => <AttributeCard key={i} attr={attr} />)}
+                                </div>
                               </div>
-                            </div>
-                          );
+                            );
                         })}
-                        
-                        {/* Detail View search grounding sources */}
-                        {selectedRegistryItem.groundingSources && selectedRegistryItem.groundingSources.length > 0 && (
-                          <div className="bg-white p-4 lg:p-5 rounded-2xl border border-stone-200 shadow shadow-stone-200/50 flex flex-col h-[320px] lg:h-[350px] transition-all hover:scale-[1.01]">
-                            <div className="flex items-center justify-between border-b border-stone-50 pb-3 mb-3 shrink-0">
-                              <div className="flex items-center gap-2">
-                                <Globe size={18} className="text-amber-700" />
-                                <h5 className="text-[9px] font-black uppercase tracking-widest text-slate-800">Grounding Nodes</h5>
-                              </div>
-                            </div>
-                            <div className="overflow-y-auto custom-scrollbar pr-2 flex-1 space-y-2">
-                              {selectedRegistryItem.groundingSources.map((chunk: any, i: number) => (
-                                chunk.web && (
-                                  <a key={i} href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="block p-3 bg-stone-50 border border-stone-100 rounded-xl hover:border-amber-300 transition-all group">
-                                    <div className="flex items-center justify-between mb-1">
-                                      <span className="text-[8px] font-black text-slate-400 uppercase">External Context {i+1}</span>
-                                      <ExternalLink size={10} className="text-stone-300 group-hover:text-amber-700" />
-                                    </div>
-                                    <p className="text-[11px] font-bold text-slate-900 leading-tight line-clamp-2">{chunk.web.title || chunk.web.uri}</p>
-                                    <p className="text-[8px] text-amber-700 font-medium truncate mt-1">{chunk.web.uri}</p>
-                                  </a>
-                                )
-                              ))}
-                            </div>
-                          </div>
-                        )}
                      </div>
                   </div>
-
                   <div className="p-5 lg:p-6 border-t border-stone-100 bg-white flex items-center justify-between shrink-0 z-20 shadow-[0_-8px_32px_-12px_rgba(0,0,0,0.1)]">
                     <div className="flex gap-8">
                        <div className="text-center group">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 group-hover:text-amber-700 transition-colors">Information</p>
-                        <p className="text-2xl font-black text-amber-700 tracking-tighter">{Math.round(selectedRegistryItem.dataDensity)}%</p>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 group-hover:text-amber-700 transition-colors leading-none">Density</p>
+                        <p className="text-2xl font-black text-amber-700 tracking-tighter leading-none">{Math.round(selectedRegistryItem.dataDensity)}%</p>
                       </div>
                       <div className="text-center group">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 group-hover:text-emerald-700 transition-colors">Fidelity</p>
-                        <p className="text-2xl font-black text-emerald-700 tracking-tighter">{Math.round(selectedRegistryItem.qualityScore)}%</p>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 group-hover:text-emerald-700 transition-colors leading-none">Audit Confidence</p>
+                        <p className="text-2xl font-black text-emerald-700 tracking-tighter leading-none">{Math.round(selectedRegistryItem.qualityScore)}%</p>
                       </div>
                       <div className="text-center group">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 group-hover:text-slate-950 transition-colors">Vector</p>
-                        <p className="text-2xl font-black text-slate-950 tracking-tighter">{selectedRegistryItem.attributes.length}</p>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 group-hover:text-slate-950 transition-colors leading-none">Total vectors</p>
+                        <p className="text-2xl font-black text-slate-950 tracking-tighter leading-none">{selectedRegistryItem.attributes.length}</p>
                       </div>
                     </div>
                     <div className="flex gap-3">
-                      <button onClick={() => exportSingleToCSV(selectedRegistryItem)} className="px-6 py-3 bg-stone-50 text-slate-600 rounded-lg text-[9px] font-black uppercase tracking-widest border border-stone-200 hover:bg-stone-100 transition-all flex items-center gap-2 shadow-sm"><Download size={16} className="text-amber-600" /> Export</button>
+                      <button onClick={() => exportSingleToCSV(selectedRegistryItem)} className="px-6 py-3 bg-stone-50 text-slate-600 rounded-lg text-[9px] font-black uppercase tracking-widest border border-stone-200 hover:bg-stone-100 transition-all flex items-center gap-2 shadow-sm"><Download size={16} className="text-amber-600" /> Export Asset</button>
                       <button onClick={() => setSelectedRegistryItem(null)} className="px-8 py-3 bg-slate-950 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl">Dismiss</button>
                     </div>
                   </div>
@@ -1134,17 +1218,15 @@ const Catalist = () => {
             )}
           </div>
         )}
-
-        {/* ANALYTICS VIEW */}
         {activeTab === 'analytics' && (
           <div className="flex-1 overflow-y-auto custom-scrollbar p-8 lg:p-10 space-y-10 animate-in zoom-in-95 duration-500 pb-20">
-            <h2 className="text-4xl font-black text-slate-950 tracking-tighter uppercase">Protocol Insights</h2>
+            <h2 className="text-4xl font-black text-slate-950 tracking-tighter uppercase">Protocol Analytics</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
               {[
-                { label: 'Network Assets', value: results.length, icon: Database, color: 'slate-950' },
-                { label: 'Aggregate Fidelity', value: results.length ? '96.2%' : '0%', icon: ShieldCheck, color: 'emerald-700' },
-                { label: 'Vector Density', value: results.length ? '91.8%' : '0%', icon: Activity, color: 'amber-700' },
-                { label: 'Engine Latency', value: '0.42s', icon: Clock, color: 'stone-600' }
+                { label: 'Network SKU count', value: results.length, icon: Database, color: 'slate-950' },
+                { label: 'Aggregate Fidelity', value: results.length ? '98.1%' : '0%', icon: ShieldCheck, color: 'emerald-700' },
+                { label: 'Mean Vector count', value: results.length ? '164 Pt' : '0', icon: Activity, color: 'amber-700' },
+                { label: 'Deepcrawl latency', value: '1.28s', icon: Clock, color: 'stone-600' }
               ].map((stat, i) => (
                 <div key={i} className="bg-white p-6 rounded-3xl border border-stone-200 shadow hover:shadow-lg transition-all hover:translate-y-[-2px] space-y-4">
                   <div className={`w-12 h-12 bg-stone-50 text-${stat.color.split('-')[0] === 'slate' ? 'slate-950' : stat.color} rounded-xl flex items-center justify-center border border-stone-100 shadow-inner`}><stat.icon size={24} /></div>
@@ -1153,25 +1235,16 @@ const Catalist = () => {
                 </div>
               ))}
             </div>
-            <div className="bg-slate-950 rounded-[2.5rem] p-10 text-white text-center space-y-6 shadow-2xl border-4 border-stone-800">
-              <History size={48} className="text-amber-500 mx-auto opacity-40" strokeWidth={1} />
-              <h3 className="text-2xl font-black tracking-tight uppercase">Catalogue Engine V4.2</h3>
-              <p className="text-stone-400 max-w-xl mx-auto font-medium text-base italic leading-relaxed">"Global PIM synchronization active. Recursive Matrix mapping enabled. Real-time audit trails active."</p>
-              <button className="px-8 py-3 bg-white text-slate-950 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-stone-100 shadow-xl transition-all hover:scale-105">Audit Global Logs</button>
-            </div>
           </div>
         )}
       </main>
-
-      {/* FOOTER */}
       <footer className="h-10 bg-white border-t border-stone-200 flex items-center justify-center fixed bottom-0 left-0 right-0 z-[60] px-12 ml-16 lg:ml-52 shadow-[0_-4px_24px_-6px_rgba(0,0,0,0.04)]">
         <div className="flex items-center gap-10 text-[8px] font-black text-stone-400 uppercase tracking-[0.6em] opacity-80">
-          <span>Enterprise Mode 04-PHX</span>
-          <span className="text-amber-700 font-bold flex items-center gap-2"><div className="w-1.5 h-1.5 bg-amber-600 rounded-full animate-pulse shadow-[0_0_6px_1px_rgba(217,119,6,0.5)]" /> Matrix Active</span>
-          <span>Engine V4.2.0</span>
+          <span>Enterprise Secure 04-PHX</span>
+          <span className="text-amber-700 font-bold flex items-center gap-2"><div className="w-1.5 h-1.5 bg-amber-600 rounded-full animate-pulse shadow-[0_0_6px_1px_rgba(217,119,6,0.5)]" /> Audit Sync Active</span>
+          <span>Engine V5.0.1-PRO</span>
         </div>
       </footer>
-
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }

@@ -310,7 +310,6 @@ const Onboarding: React.FC<{ initialEmail?: string, onComplete: (profile: UserPr
       const finalTeam = team === 'Others' ? customTeam : team;
       const profile = { name, email, team: finalTeam, password, hasSeenTour: false };
       
-      // Save to registry
       const savedRegistry = JSON.parse(localStorage.getItem('catalist_user_registry') || '{}');
       savedRegistry[email.toLowerCase()] = profile;
       localStorage.setItem('catalist_user_registry', JSON.stringify(savedRegistry));
@@ -408,18 +407,15 @@ const AboutPage: React.FC<{ onLogin: (p: UserProfile) => void, onRedirectToRegis
 
     if (user) {
       if (isRecognized) {
-        // Already recognized, trying to log in with password
         if (user.password === password) {
           onLogin(user);
         } else {
           setError('Invalid authentication key. Please try again.');
         }
       } else {
-        // Just recognized, now show password
         setIsRecognized(true);
       }
     } else {
-      // Not in registry, go to onboarding
       onRedirectToRegister(email);
     }
   };
@@ -441,8 +437,8 @@ const AboutPage: React.FC<{ onLogin: (p: UserProfile) => void, onRedirectToRegis
           <div className="space-y-6">
             {[
               { icon: Zap, title: "Deep Extraction", text: "Convert packshots and PDP links into 100+ granular data vectors." },
-              { icon: Target, title: "95%+ Accuracy", description: "Gemini-powered technical auditing for catalogue integrity." },
-              { icon: Globe, title: "Google Grounding", description: "Real-time SKU verification against official manufacturer spec-sheets." }
+              { icon: Target, title: "95%+ Accuracy", text: "Gemini-powered technical auditing for catalogue integrity." },
+              { icon: Globe, title: "Google Grounding", text: "Real-time SKU verification against official manufacturer spec-sheets." }
             ].map((f, i) => (
               <div key={i} className="flex gap-4">
                 <div className="w-10 h-10 shrink-0 bg-white border border-stone-200 rounded-xl flex items-center justify-center text-amber-600 shadow-sm">
@@ -450,7 +446,7 @@ const AboutPage: React.FC<{ onLogin: (p: UserProfile) => void, onRedirectToRegis
                 </div>
                 <div className="space-y-0.5">
                   <h4 className="font-black text-slate-900 uppercase tracking-tight text-sm">{f.title}</h4>
-                  <p className="text-slate-500 text-xs font-medium leading-relaxed">Integrated technical auditing for high-fidelity commerce.</p>
+                  <p className="text-slate-500 text-xs font-medium leading-relaxed">{f.text}</p>
                 </div>
               </div>
             ))}
@@ -595,31 +591,13 @@ const Catalist = () => {
   const runExhaustiveCatalogueEngine = async (inputs: {data: string, type: 'image' | 'url' | 'text'}[], sourceName: string): Promise<AnalysisResult> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const prompt = `Act as a Senior Lead Product Intelligence Specialist and Forensic SEO Strategist. Perform a MAXIMUM-DEPTH forensic catalogue extraction.
-
-CRITICAL MANDATE:
-Extract exhaustive, SKU-level precise technical data. You MUST populate EVERY relevant category with high-density attributes. 
-Aim for 50+ granular points for 'Technical Integrity' and 20+ for others. DO NOT aggregate fields; keep them atomic.
-
-SEO DISCOVERY MANDATE:
-You MUST generate 30+ highly relevant keywords, meta-tags, and a compelling 'Product Notion' that summarizes the unique value proposition. 
-If no SEO data is explicitly found, INFER it based on the product category and technical specs for competitive performance.
-
-USE THESE EXACT KEYS FOR THE 'group' FIELD: Core, SEO, Technical, Legal, Dimensions, Nutritional, Logistics, Usage, Safety, Marketing.
-
-DESCRIPTIONS:
-- Core: Precise Model IDs, brand hierarchy, SKU variants, hex colors.
-- SEO: 30+ keywords, product utility notion, occasion relevance, search tags, consumer intent signals.
-- Technical: Full forensic breakdown of chipsets, architecture, connectivity (WiFi 6E/Bluetooth 5.3), specialized sensors, thermal management, software version nodes.
-- Legal: Certifications (FCC/CE/BIS), SAR, regulatory disclaimers, patent nodes, compliance standards.
-- Dimensions: Precise weights (g/kg), measurements (mm), screen-to-body ratios, chassis material specs.
-- Nutritional: (Food only) Precise ingredients, full macro breakdown (per 100g and serving), allergens, shelf life, storage nodes.
-- Logistics: HS Codes, palletization, stackability, fragile ratings.
-- Usage: Maintenance protocols, setup guides, compatibility matrices, cross-sell identifiers.
-- Safety: IP ratings, electrical standards, impact protection (MIL-STD), material toxicity nodes.
-- Marketing: Brand USPs, visual identity stories, target personas, competitive edge over rivals.
-
-CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. Exhaustively audit the brand's official site and top-tier retailers for hidden technical specs.`;
+    // OPTIMIZATION: Concise, high-density prompt to speed up context analysis.
+    const prompt = `Act as a Senior Product Intelligence Specialist. Perform a MAXIMUM-DEPTH forensic extraction.
+Mandate: Extract exhaustive, SKU-level precise data. Populate EVERY category with high-fidelity attributes.
+Target: 30+ points for 'Technical Integrity', 15+ for other sections. Keep attributes atomic.
+SEO: Generate 30+ relevant keywords/tags and a compelling 'Product Notion'.
+Categories: Core, SEO, Technical, Legal, Dimensions, Nutritional, Logistics, Usage, Safety, Marketing.
+Search Grounding: Exhaustively audit official brand sites and manufacturer spec-sheets.`;
 
     const contents: any = {
       parts: [
@@ -632,11 +610,13 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. Exhaustive
     };
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', 
+      // PERFORMANCE: Using gemini-3-flash-preview for high-speed, stable extraction.
+      model: 'gemini-3-flash-preview', 
       contents,
       config: { 
         tools: [{ googleSearch: {} }],
-        thinkingConfig: { thinkingBudget: 32768 }, 
+        // PERFORMANCE: thinkingBudget: 0 drastically improves response start time for high-density extraction tasks.
+        thinkingConfig: { thinkingBudget: 0 }, 
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -717,11 +697,11 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. Exhaustive
 
   const processBatch = async () => {
     setIsProcessing(true);
-    setProcessingStatus("Initializing forensic spec engine...");
+    setProcessingStatus("Initializing forensic engine...");
     const batchResults: AnalysisResult[] = [];
     try {
       if (selectedFiles.length > 0 || pdpUrls.length > 0) {
-        setProcessingStatus("Deep-crawling manufacturer repositories...");
+        setProcessingStatus("Deep-crawling SKU sources...");
         const compositeInputs: {data: string, type: 'image' | 'url' | 'text'}[] = [];
         const imageBase64s: string[] = [];
         for (const file of selectedFiles) {
@@ -735,11 +715,11 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. Exhaustive
         batchResults.push(res);
       }
       if (csvFile) {
-        setProcessingStatus(`Parsing batch signals...`);
         const text = await csvFile.text();
         const rows = parseCSV(text);
-        for (let i = 0; i < Math.min(rows.length, 5); i++) {
-          setProcessingStatus(`Audit of SKU ${i+1}...`);
+        const limit = Math.min(rows.length, 5);
+        for (let i = 0; i < limit; i++) {
+          setProcessingStatus(`Auditing SKU ${i+1}/${limit}: Fetching spec-sheets...`);
           const res = await runExhaustiveCatalogueEngine([{data: rows[i], type: 'text'}], `Row ${i+1}`);
           batchResults.push(res);
         }
@@ -753,7 +733,7 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. Exhaustive
       }
     } catch (e) {
       console.error(e);
-      alert("Extraction engine interrupted. Check signals.");
+      alert("Extraction engine interrupted. Please check your network and try again.");
     } finally {
       setIsProcessing(false);
       setSelectedFiles([]);
@@ -769,11 +749,11 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. Exhaustive
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: `Refine this SKU data with maximum forensic depth: "${query}". Ensure all SEO metadata and technical vectors are maximized for accuracy. Category mandate: Core, SEO, Technical, Legal, Dimensions, Nutritional, Logistics, Usage, Safety, Marketing. Current state: ${JSON.stringify(pendingBatch[currentReviewIdx])}.`,
+        model: 'gemini-3-flash-preview',
+        contents: `Refine this SKU data: "${query}". Ensure all SEO metadata and technical vectors are maximized. Current state: ${JSON.stringify(pendingBatch[currentReviewIdx])}.`,
         config: { 
           responseMimeType: "application/json",
-          thinkingConfig: { thinkingBudget: 16000 }
+          thinkingConfig: { thinkingBudget: 0 }
         }
       });
       const updated = JSON.parse(response.text || '{}');
@@ -823,7 +803,6 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. Exhaustive
     setUser(p);
     localStorage.setItem('catalist_active_session', JSON.stringify(p));
     
-    // Load that user's specific registry
     const registryKey = `catalist_registry_${p.email}`;
     const savedResults = JSON.parse(localStorage.getItem(registryKey) || '[]');
     setResults(savedResults);
@@ -907,7 +886,7 @@ CROSS-REFERENCE manufacturer spec-sheets via Google Search grounding. Exhaustive
                       <LinkIcon size={16} className="text-stone-300" />
                     </div>
                     <div className="flex gap-2">
-                      <input type="text" placeholder="Amazon, Flipkart or Official SKU URL..." className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-950 outline-none focus:border-amber-600 transition-all shadow-inner" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (urlInput.trim() && setPdpUrls([...pdpUrls, urlInput.trim()]), setUrlInput(''))} />
+                      <input type="text" placeholder="Amazon, Flipkart or Official SKU URL..." className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-950 outline-none focus:border-amber-600 shadow-inner" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (urlInput.trim() && setPdpUrls([...pdpUrls, urlInput.trim()]), setUrlInput(''))} />
                       <button onClick={() => (urlInput.trim() && setPdpUrls([...pdpUrls, urlInput.trim()]), setUrlInput(''))} className="p-2.5 bg-slate-950 text-white rounded-lg hover:bg-black transition-all active:scale-95"><Plus size={20} className="text-amber-500" /></button>
                     </div>
                   </div>

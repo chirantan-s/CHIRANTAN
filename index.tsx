@@ -556,6 +556,7 @@ const Catalist = () => {
   const [refineQuery, setRefineQuery] = useState('');
   const [isRefining, setIsRefining] = useState(false);
   const [selectedRegistryItem, setSelectedRegistryItem] = useState<AnalysisResult | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const currentEntity = useMemo(() => pendingBatch[currentReviewIdx], [pendingBatch, currentReviewIdx]);
 
@@ -838,6 +839,16 @@ Search Grounding: Exhaustively audit official brand sites and manufacturer spec-
     copyToClipboard(text);
   };
 
+  const filteredResults = useMemo(() => {
+    if (!searchQuery.trim()) return results;
+    const q = searchQuery.toLowerCase();
+    return results.filter(res => 
+      res.coreInfo.displayName.toLowerCase().includes(q) || 
+      res.coreInfo.brand.toLowerCase().includes(q) || 
+      res.taxonomy.category.toLowerCase().includes(q)
+    );
+  }, [results, searchQuery]);
+
   if (!initialized) return null;
   
   if (!user) {
@@ -1113,12 +1124,21 @@ Search Grounding: Exhaustively audit official brand sites and manufacturer spec-
             <div className="flex items-center justify-between border-b border-stone-200 pb-5">
               <h2 className="text-2xl font-black text-slate-950 tracking-tighter uppercase">Master Registry</h2>
               <div className="flex gap-3">
-                <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" /><input type="text" placeholder="Lookup..." className="bg-white border border-stone-200 rounded-xl pl-8 pr-4 py-2 text-xs font-bold w-56 outline-none focus:border-amber-600 shadow-sm" /></div>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Lookup..." 
+                    className="bg-white border border-stone-200 rounded-xl pl-8 pr-4 py-2 text-xs font-bold w-56 outline-none focus:border-amber-600 shadow-sm" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
                 <button onClick={() => exportRegistryToCSV(results)} className="flex items-center gap-1.5 px-5 py-2 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-black transition-all hover:translate-y-[-1px]"><Download size={14} className="text-amber-500" /> Export All</button>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {results.map((res) => (
+              {filteredResults.map((res) => (
                 <div key={res.id} onClick={() => setSelectedRegistryItem(res)} className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 group hover:border-amber-400 transition-all cursor-pointer relative overflow-hidden hover:shadow-lg active:scale-[0.99]">
                   <div className="flex gap-5">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border shadow-sm ${res.isFood ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-stone-50 text-slate-950 border-stone-200'}`}><Package size={20} /></div>

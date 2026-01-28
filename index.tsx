@@ -189,6 +189,15 @@ const exportRegistryToCSV = (results: AnalysisResult[]) => {
   downloadCSV(csv, `catalist-registry-export.csv`);
 };
 
+// Utility to ensure scores are returned as percentages (0-100) regardless of AI format (0-1 or 0-100)
+const normalizeToPercentage = (val: any, defaultVal: number): number => {
+  const v = typeof val === 'number' ? val : defaultVal;
+  // If value is between 0 and 1, assume it's a decimal ratio and convert to percentage
+  if (v >= 0 && v <= 1) return Math.round(v * 100);
+  // If value is greater than 1, assume it's already a percentage but clamp it to 100
+  return Math.min(100, Math.round(v));
+};
+
 // --- Sub-Components ---
 
 const ProductImageViewer: React.FC<{ result: AnalysisResult }> = React.memo(({ result }) => {
@@ -286,7 +295,7 @@ const AttributeCard: React.FC<{ attr: ProductAttribute }> = React.memo(({ attr }
             {copied ? <CheckCircle2 size={10} className="text-emerald-700" /> : <Copy size={10} />}
           </button>
           <div className={`shrink-0 text-[8px] font-black px-1 py-0.5 rounded leading-none ${attr.confidence > 0.9 ? 'text-emerald-600 bg-emerald-50' : 'text-amber-600 bg-amber-50'}`}>
-            {Math.round(attr.confidence * 100)}%
+            {normalizeToPercentage(attr.confidence, 0.9)}%
           </div>
         </div>
       </div>
@@ -629,7 +638,7 @@ Search Grounding: Exhaustively audit official brand sites and manufacturer spec-
                 properties: { 
                   name: { type: Type.STRING }, 
                   value: { type: Type.STRING }, 
-                  confidence: { type: Type.NUMBER }, 
+                  confidence: { type: Type.NUMBER, description: "A decimal between 0.0 and 1.0 representing extraction confidence." }, 
                   group: { type: Type.STRING } 
                 }, 
                 required: ['name', 'value', 'confidence', 'group'] 
@@ -639,8 +648,8 @@ Search Grounding: Exhaustively audit official brand sites and manufacturer spec-
             fallbackImageUrl: { type: Type.STRING },
             brandLogoUrl: { type: Type.STRING },
             insights: { type: Type.STRING },
-            dataDensity: { type: Type.NUMBER },
-            qualityScore: { type: Type.NUMBER }
+            dataDensity: { type: Type.NUMBER, description: "A decimal between 0.0 and 1.0 representing how complete the SKU data is." },
+            qualityScore: { type: Type.NUMBER, description: "A decimal between 0.0 and 1.0 representing the forensic quality of the extraction." }
           },
           required: ['coreInfo', 'taxonomy', 'seoInfo', 'attributes', 'isFood', 'insights', 'dataDensity', 'qualityScore']
         }
@@ -670,7 +679,7 @@ Search Grounding: Exhaustively audit official brand sites and manufacturer spec-
       } else {
         g = cleanG;
       }
-      return { ...attr, group: g };
+      return { ...attr, group: g, confidence: normalizeToPercentage(attr.confidence, 0.9) / 100 };
     });
 
     return {
@@ -680,8 +689,8 @@ Search Grounding: Exhaustively audit official brand sites and manufacturer spec-
       seoInfo: parsed.seoInfo || { keywords: [], tags: [], productNotion: 'N/A', occasionRelevance: 'N/A' },
       attributes: normalizedAttributes,
       insights: parsed.insights || '',
-      dataDensity: (parsed.dataDensity || 0.5) * 100,
-      qualityScore: (parsed.qualityScore || 0.9) * 100,
+      dataDensity: normalizeToPercentage(parsed.dataDensity, 0.5),
+      qualityScore: normalizeToPercentage(parsed.qualityScore, 0.9),
       sourceType: 'composite',
       sourceValue: sourceName,
       isFood: parsed.isFood || false,
@@ -756,6 +765,17 @@ Search Grounding: Exhaustively audit official brand sites and manufacturer spec-
       });
       const updated = JSON.parse(response.text || '{}');
       const newBatch = JSON.parse(JSON.stringify(pendingBatch));
+      
+      // Normalize any potentially large scores from the refinement response
+      if (updated.dataDensity !== undefined) updated.dataDensity = normalizeToPercentage(updated.dataDensity, 0.5);
+      if (updated.qualityScore !== undefined) updated.qualityScore = normalizeToPercentage(updated.qualityScore, 0.9);
+      if (updated.attributes) {
+        updated.attributes = updated.attributes.map((a: any) => ({
+          ...a,
+          confidence: normalizeToPercentage(a.confidence, 0.9) / 100
+        }));
+      }
+
       newBatch[currentReviewIdx] = { ...newBatch[currentReviewIdx], ...updated };
       setPendingBatch(newBatch);
       pushToHistory(newBatch);
@@ -1173,11 +1193,11 @@ Search Grounding: Exhaustively audit official brand sites and manufacturer spec-
                     <div className="flex gap-8">
                        <div className="text-center group">
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 group-hover:text-amber-700 transition-colors leading-none">Density</p>
-                        <p className="text-2xl font-black text-amber-700 tracking-tighter leading-none">{Math.round(selectedRegistryItem.dataDensity)}%</p>
+                        <p className="text-2xl font-black text-amber-700 tracking-tighter leading-none">{normalizeToPercentage(selectedRegistryItem.dataDensity, 0)}%</p>
                       </div>
                       <div className="text-center group">
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 group-hover:text-emerald-700 transition-colors leading-none">Confidence</p>
-                        <p className="text-2xl font-black text-emerald-700 tracking-tighter leading-none">{Math.round(selectedRegistryItem.qualityScore)}%</p>
+                        <p className="text-2xl font-black text-emerald-700 tracking-tighter leading-none">{normalizeToPercentage(selectedRegistryItem.qualityScore, 0)}%</p>
                       </div>
                     </div>
                     <button onClick={() => setSelectedRegistryItem(null)} className="px-8 py-3 bg-slate-950 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-xl">Dismiss</button>

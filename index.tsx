@@ -198,6 +198,36 @@ const normalizeToPercentage = (val: any, defaultVal: number): number => {
   return Math.min(100, Math.round(v));
 };
 
+// Helper to filter out "Not Applicable" attributes, specifically focusing on ATC Code as requested
+const filterVisibleAttributes = (attributes: ProductAttribute[], group: string) => {
+  if (!attributes) return [];
+  return attributes.filter(a => {
+    const matchesGroup = String(a.group).toLowerCase() === group.toLowerCase();
+    if (!matchesGroup) return false;
+    
+    const nameUpper = a.name.toUpperCase().trim();
+    const valUpper = a.value.toUpperCase().trim();
+
+    // User requirement: Hide ATC Code if not applicable
+    if (nameUpper.includes('ATC CODE')) {
+      if (
+        valUpper.includes('NOT APPLICABLE') || 
+        valUpper === 'N/A' || 
+        valUpper === 'NONE' || 
+        valUpper === 'N.A.' ||
+        valUpper.includes('NOT AVAILABLE')
+      ) {
+        return false;
+      }
+    }
+    
+    // Also generally skip attributes that are just 'NOT APPLICABLE' across other sections to keep the catalogue clean
+    if (valUpper === 'NOT APPLICABLE' || valUpper === 'N/A') return false;
+
+    return true;
+  });
+};
+
 // --- Sub-Components ---
 
 const ProductImageViewer: React.FC<{ result: AnalysisResult }> = React.memo(({ result }) => {
@@ -1030,7 +1060,8 @@ Search Grounding: Exhaustively audit official brand sites, ingredient databases,
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-max">
                     {CATALOGUE_SECTIONS
                       .map(section => {
-                        const sectionAttrs = currentEntity.attributes.filter(a => String(a.group).toLowerCase() === section.group.toLowerCase());
+                        // User request: hide ATC code if not applicable
+                        const sectionAttrs = filterVisibleAttributes(currentEntity.attributes, section.group);
                         const isSEO = section.group === 'SEO';
                         const hasContent = sectionAttrs.length > 0 || isSEO;
                         if (!hasContent) return null;
@@ -1176,7 +1207,7 @@ Search Grounding: Exhaustively audit official brand sites, ingredient databases,
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 auto-rows-max">
                         {CATALOGUE_SECTIONS
                           .map(section => {
-                            const sectionAttrs = selectedRegistryItem.attributes.filter(a => String(a.group).toLowerCase() === section.group.toLowerCase());
+                            const sectionAttrs = filterVisibleAttributes(selectedRegistryItem.attributes, section.group);
                             const isSEO = section.group === 'SEO';
                             const hasContent = sectionAttrs.length > 0 || isSEO;
                             if (!hasContent) return null;

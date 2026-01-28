@@ -606,8 +606,12 @@ Mandate: Extract exhaustive, SKU-level precise data. Populate EVERY category wit
 Target: 30+ points for 'Technical Integrity', 15+ for other sections. Keep attributes atomic.
 SEO: Generate 30+ relevant keywords/tags and a compelling 'Product Notion'.
 Categories: Core, SEO, Technical, Legal, Dimensions, Nutritional, Logistics, Usage, Safety, Marketing.
-MEDICINE SPECIFIC: For medicines, under 'Legal' (Regulatory Compliance), you MUST extract: ATC Code, Body System Folder, Disease Folder, Mechanism Folder, Chemical Family Folder, and Specific Drug File wherever applicable.
-Search Grounding: Exhaustively audit official brand sites and manufacturer spec-sheets.`;
+MEDICINE & PHARMA COMPLIANCE: 
+- For medicines and medicated personal care, you MUST extract: ATC Code, Body System Folder, Disease Folder, Mechanism Folder, Chemical Family Folder, and Specific Drug File.
+- CRITICAL: ATC Code accuracy is paramount. Assign specific 5th-level codes (e.g., D11AC01) ONLY if the corresponding active ingredient (e.g., Cetrimide) is confirmed.
+- If a product is a medicated shampoo/skin treatment but lacks the specific active for a sub-code, use the 4th-level group (e.g., D11AC). 
+- If the product is purely cosmetic with no therapeutic active ingredients, set ATC Code to "Not Applicable (Cosmetic)".
+Search Grounding: Exhaustively audit official brand sites, ingredient databases, and manufacturer spec-sheets to verify chemical compositions.`;
 
     const contents: any = {
       parts: [

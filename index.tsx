@@ -591,12 +591,12 @@ const Catalist = () => {
   const runExhaustiveCatalogueEngine = async (inputs: {data: string, type: 'image' | 'url' | 'text'}[], sourceName: string): Promise<AnalysisResult> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // OPTIMIZATION: Concise, high-density prompt to speed up context analysis.
     const prompt = `Act as a Senior Product Intelligence Specialist. Perform a MAXIMUM-DEPTH forensic extraction.
 Mandate: Extract exhaustive, SKU-level precise data. Populate EVERY category with high-fidelity attributes.
 Target: 30+ points for 'Technical Integrity', 15+ for other sections. Keep attributes atomic.
 SEO: Generate 30+ relevant keywords/tags and a compelling 'Product Notion'.
 Categories: Core, SEO, Technical, Legal, Dimensions, Nutritional, Logistics, Usage, Safety, Marketing.
+MEDICINE SPECIFIC: For medicines, under 'Legal' (Regulatory Compliance), you MUST extract: ATC Code, Body System Folder, Disease Folder, Mechanism Folder, Chemical Family Folder, and Specific Drug File wherever applicable.
 Search Grounding: Exhaustively audit official brand sites and manufacturer spec-sheets.`;
 
     const contents: any = {
@@ -610,12 +610,10 @@ Search Grounding: Exhaustively audit official brand sites and manufacturer spec-
     };
 
     const response = await ai.models.generateContent({
-      // PERFORMANCE: Using gemini-3-flash-preview for high-speed, stable extraction.
       model: 'gemini-3-flash-preview', 
       contents,
       config: { 
         tools: [{ googleSearch: {} }],
-        // PERFORMANCE: thinkingBudget: 0 drastically improves response start time for high-density extraction tasks.
         thinkingConfig: { thinkingBudget: 0 }, 
         responseMimeType: "application/json",
         responseSchema: {

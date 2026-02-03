@@ -631,7 +631,22 @@ const Catalist = () => {
   const runExhaustiveCatalogueEngine = async (inputs: {data: string, type: 'image' | 'url' | 'text'}[], sourceName: string): Promise<AnalysisResult> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const prompt = `Act as a Senior Product Intelligence Specialist. Perform a MAXIMUM-DEPTH forensic extraction.
+    const prompt = `PHASE 1: SOURCE SIGNAL EVALUATION (CRITICAL STEP) Before extracting attributes, you MUST evaluate the quality of the provided input text.
+
+CONDITION A: HAPPY FLOW (Valid Data Detected)
+Trigger: If the input text contains specific product details, descriptions, or technical specifications (and is NOT a generic error message).
+Action: Proceed with Standard Forensic Extraction.
+Constraint: You MUST prioritize the provided input text above all else. Do NOT override valid source data with external searches or URL guesses. Ensure 100% fidelity to the provided signal.
+
+CONDITION B: BLOCKED FLOW (Anti-Scraping/Empty Detected)
+Trigger: If the input text is empty, or contains only generic blocking terms like 'Robot Check', 'Captcha', '503 Service Unavailable', 'Access Denied', or 'Something went wrong'.
+Action: Initiate Recovery Protocol:
+1. URL Decode: Parse the input URL string to extract the Brand and Product Name (e.g., extract 'Smartivity' + 'Launcher' from the slug).
+2. External Search: Immediately use the googleSearch tool to query for [Brand] + [Product Name] + 'official specs'.
+3. Synthesize: Use the search results to populate the catalogue, filling in the missing data that the blocked page failed to provide.
+
+PHASE 2: STANDARD FORENSIC EXTRACTION
+Act as a Senior Product Intelligence Specialist. Perform a MAXIMUM-DEPTH forensic extraction.
 Mandate: Extract exhaustive, SKU-level precise data. Populate EVERY category with high-fidelity attributes.
 Target: 30+ points for 'Technical Integrity', 15+ for other sections. Keep attributes atomic.
 SEO: Generate 30+ relevant keywords/tags and a compelling 'Product Notion'.
@@ -847,6 +862,16 @@ Search Grounding: Exhaustively audit official brand sites, ingredient databases,
     }
   };
 
+  const handleDiscard = () => {
+    const newBatch = pendingBatch.filter((_, i) => i !== currentReviewIdx);
+    setPendingBatch(newBatch);
+    if (newBatch.length === 0) {
+      setActiveTab('ingest');
+    } else {
+      setCurrentReviewIdx(prev => Math.min(prev, newBatch.length - 1));
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('catalist_active_session');
     setUser(null);
@@ -1025,7 +1050,7 @@ Search Grounding: Exhaustively audit official brand sites, ingredient databases,
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => exportSingleToCSV(currentEntity)} className="px-3 py-1.5 bg-white border border-stone-200 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest hover:text-amber-700 transition-all shadow-sm flex items-center gap-1.5"><Download size={12} /> Export</button>
-                      <button onClick={() => setPendingBatch(pendingBatch.filter((_, i) => i !== currentReviewIdx))} className="px-3 py-1.5 bg-white border border-stone-200 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest hover:text-red-700 transition-all shadow-sm">Discard</button>
+                      <button onClick={handleDiscard} className="px-3 py-1.5 bg-white border border-stone-200 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest hover:text-red-700 transition-all shadow-sm">Discard</button>
                       <button onClick={commitToRegistry} className="px-4 py-1.5 bg-slate-950 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-xl shadow-stone-200 hover:bg-black transition-all flex items-center gap-1.5"><CheckCircle2 size={14} className="text-amber-500" /> Finalize</button>
                     </div>
                   </div>

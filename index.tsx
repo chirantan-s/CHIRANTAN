@@ -636,11 +636,12 @@ Mandate: Extract exhaustive, SKU-level precise data. Populate EVERY category wit
 Target: 30+ points for 'Technical Integrity', 15+ for other sections. Keep attributes atomic.
 SEO: Generate 30+ relevant keywords/tags and a compelling 'Product Notion'.
 Categories: Core, SEO, Technical, Legal, Dimensions, Nutritional, Logistics, Usage, Safety, Marketing.
-MEDICINE & PHARMA COMPLIANCE: 
-- For medicines and medicated personal care, you MUST extract: ATC Code, Body System Folder, Disease Folder, Mechanism Folder, Chemical Family Folder, and Specific Drug File.
-- CRITICAL: ATC Code accuracy is paramount. Assign specific 5th-level codes (e.g., D11AC01) ONLY if the corresponding active ingredient (e.g., Cetrimide) is confirmed.
-- If a product is a medicated shampoo/skin treatment but lacks the specific active for a sub-code, use the 4th-level group (e.g., D11AC). 
-- If the product is purely cosmetic with no therapeutic active ingredients, set ATC Code to "Not Applicable (Cosmetic)".
+CATEGORY CHECK & PHARMA COMPLIANCE:
+- First, determine if the product is a Medicine/Pharmaceutical. 
+- IF YES: You MUST extract ATC Code, Body System Folder, Disease Folder, Mechanism Folder, Chemical Family Folder, and Specific Drug File. Assign specific 5th-level codes (e.g., D11AC01) ONLY if the corresponding active ingredient (e.g., Cetrimide) is confirmed.
+- IF NO (e.g., Toys, Electronics, Home Goods, Apparel, Food, non-medicated Cosmetics): You must strictly output 'N/A' for ATC Code and Pharma folders. Do NOT hallucinate medical data for general consumer goods.
+DATA INTEGRITY:
+- If the input URL or Image fails to load or provide data, do NOT default to a training example (like Minimalist Serum). Return 'Data Unavailable' for all fields.
 Search Grounding: Exhaustively audit official brand sites, ingredient databases, and manufacturer spec-sheets to verify chemical compositions.`;
 
     const contents: any = {

@@ -659,12 +659,23 @@ Act as a Senior Product Intelligence Specialist. Perform a MAXIMUM-DEPTH forensi
 * **ARCHETYPE C: SOFTLINES (Apparel, Textiles)**
    * **Extract:** Precise Fiber Composition (e.g., '95% Cotton'), Weave Type (Twill/Satin), GSM (Weight), Thread Count, Seam Type, Closure Hardware (YKK Zipper), Fit Profile, Rise/Inseam.
 
-PHASE 3: UNIVERSAL REGULATORY COMPLIANCE
-Regardless of category, generate these specific 'Legal' attributes:
-1. **HSN/SAC Code:** Infer standard 4-6 digit prefix.
-2. **Compliance Standard:** (BIS, FSSAI, FDA, CE, ISO).
-3. **Warranty:** Explicit terms or 'No Warranty Applicable'.
-4. **Country of Origin:** Extract or infer.
+PHASE 3: UNIVERSAL ATTRIBUTES (REQUIRED FOR ALL SKUs)
+Regardless of category, you MUST extract attributes for these groups:
+
+1. **Group: Legal**
+   - HSN/SAC Code (4-6 digit)
+   - Compliance Standard (BIS, FSSAI, FDA, CE, ISO)
+   - Warranty Details
+   - Country of Origin
+
+2. **Group: Logistics**
+   - Extract: Package Weight (Dead weight), Volumetric Weight (Estimated), Shelf Life (Days/Months), Storage Class (Ambient/Frozen/Hazardous), Fragility Score (Low/High), Stackability.
+
+3. **Group: Marketing**
+   - Extract: Target Audience (e.g., 'Pro Gamers', 'Toddlers'), Usage Occasion (e.g., 'Diwali', 'Daily'), Value Proposition (USP), Price Segment (Mass/Premium).
+
+4. **Group: Usage**
+   - Extract: User Instructions, Safety Warnings (CRITICAL: Extract all warnings e.g. 'Choking Hazard', 'Allergen Info', 'Flammability'), Precautionary Statements, Age Guidance, Care/Maintenance.
 
 PHASE 4: STRATEGIC SEO (PRECISION MODE)
 * **Constraint:** Stop generating 30+ tags.

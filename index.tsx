@@ -175,6 +175,9 @@ const exportSingleToCSV = (item: AnalysisResult) => {
   csv += `Core,Brand,"${item.coreInfo.brand}",1.0\n`;
   csv += `Taxonomy,Category,"${item.taxonomy.category}",1.0\n`;
   csv += `SEO,Product Notion,"${item.seoInfo.productNotion}",1.0\n`;
+  if (item.seoInfo.keywords && item.seoInfo.keywords.length > 0) {
+    csv += `SEO,Keywords,"${item.seoInfo.keywords.join(', ')}",1.0\n`;
+  }
   item.attributes.forEach(attr => {
     csv += `"${attr.group}","${attr.name}","${attr.value}",${attr.confidence}\n`;
   });
@@ -918,9 +921,22 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
     setIsRegistering(true);
   };
 
-  const handleCopySection = (group: string, attributes: ProductAttribute[]) => {
-    const text = attributes.filter(a => a.group === group).map(a => `${a.name}: ${a.value}`).join('\n');
-    copyToClipboard(text);
+  const handleCopySection = (group: string, item: AnalysisResult) => {
+    let text = '';
+    
+    if (group === 'SEO') {
+      if (item.seoInfo.productNotion) text += `Product Notion: ${item.seoInfo.productNotion}\n\n`;
+      if (item.seoInfo.keywords && item.seoInfo.keywords.length > 0) text += `Keywords:\n${item.seoInfo.keywords.join(', ')}\n\n`;
+    }
+
+    const attrs = item.attributes.filter(a => a.group === group);
+    if (attrs.length > 0) {
+      text += attrs.map(a => `${a.name}: ${a.value}`).join('\n');
+    }
+    
+    if (text.trim()) {
+      copyToClipboard(text);
+    }
   };
 
   const filteredResults = useMemo(() => {
@@ -1124,7 +1140,7 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
                                 <h5 className="text-[9px] font-black uppercase tracking-widest text-slate-800 leading-none">{section.title}</h5>
                               </div>
                               <div className="flex items-center gap-1">
-                                 <button onClick={() => handleCopySection(section.group, currentEntity.attributes)} className="p-0.5 text-stone-300 hover:text-amber-700 transition-all" title="Copy Section"><Copy size={12} /></button>
+                                 <button onClick={() => handleCopySection(section.group, currentEntity)} className="p-0.5 text-stone-300 hover:text-amber-700 transition-all" title="Copy Section"><Copy size={12} /></button>
                                  <span className="text-[9px] font-black px-2 py-0.5 rounded leading-none text-emerald-700 bg-emerald-50">
                                    {sectionAttrs.length + (isSEO ? 1 : 0)} Pt
                                  </span>
@@ -1251,7 +1267,14 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
                         <h2 className="text-2xl font-black text-slate-950 tracking-tighter uppercase leading-none">{selectedRegistryItem.coreInfo.displayName}</h2>
                       </div>
                     </div>
-                    <button onClick={() => setSelectedRegistryItem(null)} className="p-3 bg-stone-50 text-stone-400 rounded-xl hover:bg-red-50 hover:text-red-700 transition-all shadow-inner"><X size={24} /></button>
+                    <div className="flex gap-2">
+                       <button onClick={() => exportSingleToCSV(selectedRegistryItem)} className="p-3 bg-stone-50 text-stone-400 rounded-xl hover:bg-emerald-50 hover:text-emerald-700 transition-all shadow-inner" title="Download CSV">
+                         <Download size={24} />
+                       </button>
+                       <button onClick={() => setSelectedRegistryItem(null)} className="p-3 bg-stone-50 text-stone-400 rounded-xl hover:bg-red-50 hover:text-red-700 transition-all shadow-inner">
+                         <X size={24} />
+                       </button>
+                    </div>
                   </div>
                   <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-8 bg-stone-50/50">
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 auto-rows-max">

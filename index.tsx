@@ -672,7 +672,7 @@ Regardless of category, you MUST extract attributes for these groups:
    - Country of Origin
 
 2. **Group: Logistics**
-   - Extract: Package Weight (Dead weight), Volumetric Weight (Estimated), Shelf Life (Days/Months), Storage Class (Ambient/Frozen/Hazardous), Fragility Score (Low/High), Stackability, Manufacturer Details, Importer Details, Brand Marketer Details.
+   - Extract: Package Weight (Dead weight), Volumetric Weight (Estimated), Shelf Life (Days/Months), Storage Class (Ambient/Frozen/Hazardous), Fragility Score (Low/High), Stackability, Manufacturer Details, Importer Details (if applicable), Brand Marketer Details.
 
 3. **Group: Marketing**
    - Extract: Target Audience (e.g., 'Pro Gamers', 'Toddlers'), Usage Occasion (e.g., 'Diwali', 'Daily'), Value Proposition (USP), Price Segment (Mass/Premium).

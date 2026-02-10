@@ -736,7 +736,7 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     
     const validGroups = CATALOGUE_SECTIONS.map(c => c.group);
-    const normalizedAttributes = (parsed.attributes || []).map((attr: any) => {
+    let normalizedAttributes = (parsed.attributes || []).map((attr: any) => {
       let g = attr.group || 'Technical';
       const cleanG = String(g).trim();
       if (!validGroups.includes(cleanG as any)) {
@@ -757,6 +757,25 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
       }
       return { ...attr, group: g, confidence: normalizeToPercentage(attr.confidence, 0.9) / 100 };
     });
+
+    if (parsed.coreInfo) {
+      const coreExtras = [
+        { name: "Product Name", value: parsed.coreInfo.displayName },
+        { name: "Brand Identity", value: parsed.coreInfo.brand },
+        { name: "Net Quantity", value: parsed.coreInfo.quantity },
+        { name: "Color Family", value: parsed.coreInfo.color }
+      ].filter(item => item.value && item.value !== 'N/A' && item.value !== 'Unknown');
+
+      const coreAttributes = coreExtras.map(c => ({
+        name: c.name,
+        value: c.value,
+        group: 'Core' as const,
+        confidence: 1.0
+      }));
+
+      // Prepend coreAttributes to normalizedAttributes to ensure they appear first
+      normalizedAttributes = [...coreAttributes, ...normalizedAttributes];
+    }
 
     return {
       id: Math.random().toString(36).substr(2, 9),

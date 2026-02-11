@@ -171,14 +171,14 @@ const downloadCSV = (csvContent: string, fileName: string) => {
 
 const exportSingleToCSV = (item: AnalysisResult) => {
   let csv = `Group,Attribute,Value,Confidence\n`;
-  csv += `Core,Display Name,"${item.coreInfo.displayName}",1.0\n`;
-  csv += `Core,Brand,"${item.coreInfo.brand}",1.0\n`;
-  csv += `Taxonomy,Category,"${item.taxonomy.category}",1.0\n`;
-  csv += `SEO,Product Notion,"${item.seoInfo.productNotion}",1.0\n`;
-  if (item.seoInfo.keywords && item.seoInfo.keywords.length > 0) {
+  csv += `Core,Display Name,"${item.coreInfo?.displayName || ''}",1.0\n`;
+  csv += `Core,Brand,"${item.coreInfo?.brand || ''}",1.0\n`;
+  csv += `Taxonomy,Category,"${item.taxonomy?.category || ''}",1.0\n`;
+  csv += `SEO,Product Notion,"${item.seoInfo?.productNotion || ''}",1.0\n`;
+  if (item.seoInfo?.keywords && item.seoInfo.keywords.length > 0) {
     csv += `SEO,Keywords,"${item.seoInfo.keywords.join(', ')}",1.0\n`;
   }
-  item.attributes.forEach(attr => {
+  (item.attributes || []).forEach(attr => {
     csv += `"${attr.group}","${attr.name}","${attr.value}",${attr.confidence}\n`;
   });
   downloadCSV(csv, `catalist-product-${item.id}.csv`);
@@ -187,7 +187,7 @@ const exportSingleToCSV = (item: AnalysisResult) => {
 const exportRegistryToCSV = (results: AnalysisResult[]) => {
   let csv = `ID,Display Name,Brand,Category,SubCategory,Data Density,Quality Score,Is Food,Attribute Count\n`;
   results.forEach(item => {
-    csv += `"${item.id}","${item.coreInfo.displayName}","${item.coreInfo.brand}","${item.taxonomy.category}","${item.taxonomy.subCategory}",${item.dataDensity}%,${item.qualityScore}%,${item.isFood},${item.attributes.length}\n`;
+    csv += `"${item.id}","${item.coreInfo?.displayName || ''}","${item.coreInfo?.brand || ''}","${item.taxonomy?.category || ''}","${item.taxonomy?.subCategory || ''}",${item.dataDensity}%,${item.qualityScore}%,${item.isFood},${item.attributes?.length || 0}\n`;
   });
   downloadCSV(csv, `catalist-registry-export.csv`);
 };
@@ -211,8 +211,8 @@ const filterVisibleAttributes = (attributes: ProductAttribute[], group: string) 
     const nameUpper = a.name.toUpperCase().trim();
     const valUpper = a.value.toUpperCase().trim();
 
-    // User requirement: Hide ATC Code if not applicable
-    if (nameUpper.includes('ATC CODE')) {
+    // User requirement: Hide ATC Code and Drug Schedule if not applicable
+    if (nameUpper.includes('ATC CODE') || nameUpper.includes('DRUG SCHEDULE')) {
       if (
         valUpper.includes('NOT APPLICABLE') || 
         valUpper === 'N/A' || 
@@ -244,7 +244,7 @@ const ProductImageViewer: React.FC<{ result: AnalysisResult }> = React.memo(({ r
 
   const getRepImage = () => {
     if (result.isFood) return "https://images.unsplash.com/photo-1542831371-29b0f74f9713?auto=format&fit=crop&q=80&w=800";
-    const cat = (result.taxonomy.category || '').toLowerCase();
+    const cat = (result.taxonomy?.category || '').toLowerCase();
     if (cat.includes('kitchen')) return "https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&q=80&w=800";
     if (cat.includes('appliance') || cat.includes('home')) return "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80&w=800";
     if (cat.includes('electronic') || cat.includes('tech')) return "https://images.unsplash.com/photo-1526738549149-8e07eca270b4?auto=format&fit=crop&q=80&w=800";
@@ -297,7 +297,7 @@ const ProductImageViewer: React.FC<{ result: AnalysisResult }> = React.memo(({ r
                </div>
                <div className="text-center space-y-0.5 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/20">
                  <p className="text-[7px] font-black uppercase tracking-[0.2em] text-white/80">Asset Mapping Offline</p>
-                 <p className="text-[10px] font-black uppercase tracking-tight text-white">{result.coreInfo.brand}</p>
+                 <p className="text-[10px] font-black uppercase tracking-tight text-white">{result.coreInfo?.brand || 'Unknown'}</p>
                </div>
             </div>
          </div>
@@ -570,7 +570,7 @@ const AboutPage: React.FC<{ onLogin: (p: UserProfile) => void, onRedirectToRegis
 // --- Main App Flow ---
 
 const Catalist = () => {
-  const [activeTab, setActiveTab] = useState<'ingest' | 'review' | 'catalogue' | 'analytics'>('ingest');
+  const [activeTab, setActiveTab] = useState<'ingest' | 'review' | 'catalogue' | 'analytics' | 'system'>('ingest');
   const [results, setResults] = useState<AnalysisResult[]>([]);
   const [pendingBatch, setPendingBatch] = useState<AnalysisResult[]>([]);
   const [currentReviewIdx, setCurrentReviewIdx] = useState(0);
@@ -655,6 +655,7 @@ Act as a Senior Product Intelligence Specialist. Perform a MAXIMUM-DEPTH forensi
 
 * **ARCHETYPE A: CONSUMABLES (Food, Pharma, Skincare)**
    * **Extract:** Full Ingredient List (Descending), Active Concentrations (%), Formulation Base (Gel/Cream), Viscosity, pH Level, Scent Profile, Absorption Rate, Energy breakdown, Macro/Micronutrients, Diet Claims (Keto/Vegan), Packaging Material (PET/Glass).
+   * **MEDICINE SPECIFIC (Technical Group):** If the product is a medicine, you MUST extract 'ATC Code' and 'Drug Schedule' (e.g. Schedule H, OTC) under the Technical group. Do NOT extract these for non-medicines.
 
 * **ARCHETYPE B: HARDLINES (Electronics, Toys, Appliances)**
    * **Extract:** Processor/Chipset, RAM/Storage, Motor Torque/RPM, Sensor Suite, Connectivity (BT Ver, WiFi Standard), Port Specs, Battery (mAh + Wattage), Material Grade (ABS/Aluminum), IP Rating, Operating Temp, Assembly Logic, Box Contents.
@@ -944,11 +945,11 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
     let text = '';
     
     if (group === 'SEO') {
-      if (item.seoInfo.productNotion) text += `Product Notion: ${item.seoInfo.productNotion}\n\n`;
-      if (item.seoInfo.keywords && item.seoInfo.keywords.length > 0) text += `Keywords:\n${item.seoInfo.keywords.join(', ')}\n\n`;
+      if (item.seoInfo?.productNotion) text += `Product Notion: ${item.seoInfo.productNotion}\n\n`;
+      if (item.seoInfo?.keywords && item.seoInfo.keywords.length > 0) text += `Keywords:\n${item.seoInfo.keywords.join(', ')}\n\n`;
     }
 
-    const attrs = item.attributes.filter(a => a.group === group);
+    const attrs = (item.attributes || []).filter(a => a.group === group);
     if (attrs.length > 0) {
       text += attrs.map(a => `${a.name}: ${a.value}`).join('\n');
     }
@@ -958,13 +959,65 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
     }
   };
 
+  const handleCreateBackup = () => {
+    const backupData = {
+      meta: {
+        version: '5.0.1-PRO',
+        timestamp: Date.now(),
+        exportType: 'full_system_backup'
+      },
+      user,
+      registry: results
+    };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `catalist_restore_point_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleRestoreBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (data.registry && Array.isArray(data.registry)) {
+        if (confirm(`Restore system to state from ${new Date(data.meta.timestamp).toLocaleString()}? This will overwrite ${results.length} existing items.`)) {
+          setResults(data.registry);
+          alert('System restored successfully.');
+        }
+      } else {
+        alert('Invalid backup file structure.');
+      }
+    } catch (err) {
+      alert('Failed to parse backup file.');
+    }
+  };
+
+  const handleFactoryReset = () => {
+    if (confirm('CRITICAL WARNING: This will permanently delete all local registry data and session tokens. Are you sure?')) {
+      if (user) {
+        localStorage.removeItem(`catalist_registry_${user.email}`);
+      }
+      localStorage.removeItem('catalist_active_session');
+      setResults([]);
+      setUser(null);
+      window.location.reload();
+    }
+  };
+
   const filteredResults = useMemo(() => {
     if (!searchQuery.trim()) return results;
     const q = searchQuery.toLowerCase();
     return results.filter(res => 
-      res.coreInfo.displayName.toLowerCase().includes(q) || 
-      res.coreInfo.brand.toLowerCase().includes(q) || 
-      res.taxonomy.category.toLowerCase().includes(q)
+      (res.coreInfo?.displayName || '').toLowerCase().includes(q) || 
+      (res.coreInfo?.brand || '').toLowerCase().includes(q) || 
+      (res.taxonomy?.category || '').toLowerCase().includes(q)
     );
   }, [results, searchQuery]);
 
@@ -989,7 +1042,8 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
             { id: 'ingest', icon: Plus, label: 'Ingest Hub' },
             { id: 'review', icon: Target, label: 'Audit Space', active: !!pendingBatch.length },
             { id: 'catalogue', icon: Database, label: 'Registry', count: results.length },
-            { id: 'analytics', icon: BarChart3, label: 'Insights' }
+            { id: 'analytics', icon: BarChart3, label: 'Insights' },
+            { id: 'system', icon: Settings, label: 'System' }
           ].map((item: any) => (
             <button key={item.id} onClick={() => setActiveTab(item.id)} disabled={item.id === 'review' && !pendingBatch.length} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === item.id ? 'bg-slate-950 text-white shadow-lg' : 'text-slate-500 hover:bg-stone-50 disabled:opacity-20'}`}>
               <item.icon size={18} className={activeTab === item.id ? 'text-amber-500' : ''} />
@@ -1134,7 +1188,7 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
                           <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${currentReviewIdx === idx ? 'bg-amber-500 text-slate-950' : 'bg-stone-100 text-slate-400'}`}>
                             {idx + 1}
                           </div>
-                          <span className="text-[10px] font-bold truncate max-w-[160px]">{p.coreInfo.displayName}</span>
+                          <span className="text-[10px] font-bold truncate max-w-[160px]">{p.coreInfo?.displayName || 'Unknown'}</span>
                         </button>
                       ))}
                     </div>
@@ -1169,15 +1223,15 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
                               <div className="p-3 bg-stone-50 rounded-xl border border-stone-100 space-y-3 mb-3 shrink-0 shadow-inner">
                                 <div>
                                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Product Notion</p>
-                                  <p className="text-[10px] font-bold text-slate-600 leading-tight italic line-clamp-3">"{currentEntity.seoInfo.productNotion || 'Forensic intent analysis active...'}"</p>
+                                  <p className="text-[10px] font-bold text-slate-600 leading-tight italic line-clamp-3">"{currentEntity.seoInfo?.productNotion || 'Forensic intent analysis active...'}"</p>
                                 </div>
                                 <div className="space-y-1">
                                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Metadata Tags</p>
                                   <div className="flex flex-wrap gap-1">
-                                    {(currentEntity.seoInfo.keywords || []).slice(0, 20).map((buzz, i) => (
+                                    {(currentEntity.seoInfo?.keywords || []).slice(0, 20).map((buzz, i) => (
                                       <span key={i} className="px-1.5 py-0.5 bg-white border border-stone-200 text-[7px] font-black text-amber-700 rounded uppercase shadow-sm">#{buzz}</span>
                                     ))}
-                                    {(!currentEntity.seoInfo.keywords || currentEntity.seoInfo.keywords.length === 0) && <span className="text-[7px] text-stone-300 italic">No search signals...</span>}
+                                    {(!currentEntity.seoInfo?.keywords || currentEntity.seoInfo.keywords.length === 0) && <span className="text-[7px] text-stone-300 italic">No search signals...</span>}
                                   </div>
                                 </div>
                               </div>
@@ -1196,18 +1250,18 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
                <div className="p-4 border-b border-stone-50 space-y-3 bg-white z-20">
                   <ProductImageViewer result={currentEntity} />
                   <div className="text-center space-y-0.5 px-1">
-                    <span className="text-[7px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-0.5 rounded-lg tracking-widest border border-amber-100/50 leading-none">{currentEntity.taxonomy.category}</span>
-                    <h3 className="text-xs font-black text-slate-950 leading-tight uppercase tracking-tight line-clamp-2">{currentEntity.coreInfo.displayName}</h3>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest opacity-80 leading-none">{currentEntity.coreInfo.brand}</p>
+                    <span className="text-[7px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-0.5 rounded-lg tracking-widest border border-amber-100/50 leading-none">{currentEntity.taxonomy?.category || 'N/A'}</span>
+                    <h3 className="text-xs font-black text-slate-950 leading-tight uppercase tracking-tight line-clamp-2">{currentEntity.coreInfo?.displayName || 'Unknown Product'}</h3>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest opacity-80 leading-none">{currentEntity.coreInfo?.brand || 'Unknown Brand'}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 py-2 border-y border-stone-100/60">
                     <div className="text-center border-r border-stone-100">
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 leading-none">Vectors</p>
-                      <p className="text-lg font-black text-amber-700 tabular-nums leading-none">{currentEntity.attributes.length + (currentEntity.seoInfo.keywords?.length || 0)}</p>
+                      <p className="text-lg font-black text-amber-700 tabular-nums leading-none">{(currentEntity.attributes?.length || 0) + (currentEntity.seoInfo?.keywords?.length || 0)}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 leading-none">Fidelity</p>
-                      <p className="text-lg font-black text-slate-950 tabular-nums leading-none">{Math.round(currentEntity.qualityScore)}%</p>
+                      <p className="text-lg font-black text-slate-950 tabular-nums leading-none">{Math.round(currentEntity.qualityScore || 0)}%</p>
                     </div>
                   </div>
                </div>
@@ -1263,9 +1317,9 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
                   <div className="flex gap-5">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border shadow-sm ${res.isFood ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-stone-50 text-slate-950 border-stone-200'}`}><Package size={20} /></div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex justify-between mb-1"><span className="text-[8px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-0.5 rounded shadow-inner border border-amber-100/50">{res.taxonomy.category}</span><div className="text-emerald-700 font-black text-[8px] uppercase flex items-center gap-1"><CheckCircle size={10} /> Sync</div></div>
-                      <h3 className="text-base font-black text-slate-950 truncate leading-tight group-hover:text-amber-700 transition-colors uppercase tracking-tight">{res.coreInfo.displayName}</h3>
-                      <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">{res.coreInfo.brand}</p>
+                      <div className="flex justify-between mb-1"><span className="text-[8px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-0.5 rounded shadow-inner border border-amber-100/50">{res.taxonomy?.category || 'N/A'}</span><div className="text-emerald-700 font-black text-[8px] uppercase flex items-center gap-1"><CheckCircle size={10} /> Sync</div></div>
+                      <h3 className="text-base font-black text-slate-950 truncate leading-tight group-hover:text-amber-700 transition-colors uppercase tracking-tight">{res.coreInfo?.displayName || 'Unknown Product'}</h3>
+                      <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">{res.coreInfo?.brand || 'Unknown Brand'}</p>
                     </div>
                   </div>
                 </div>
@@ -1281,9 +1335,9 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
                       </div>
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-[9px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-1 rounded-lg tracking-widest border border-amber-100/50 leading-none">{selectedRegistryItem.taxonomy.category}</span>
+                          <span className="text-[9px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-1 rounded-lg tracking-widest border border-amber-100/50 leading-none">{selectedRegistryItem.taxonomy?.category || 'N/A'}</span>
                         </div>
-                        <h2 className="text-2xl font-black text-slate-950 tracking-tighter uppercase leading-none">{selectedRegistryItem.coreInfo.displayName}</h2>
+                        <h2 className="text-2xl font-black text-slate-950 tracking-tighter uppercase leading-none">{selectedRegistryItem.coreInfo?.displayName || 'Unknown Product'}</h2>
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -1316,12 +1370,12 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
                                   <div className="p-3 bg-stone-50 rounded-xl border border-stone-100 space-y-3 mb-3 shrink-0 shadow-inner">
                                     <div>
                                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Product Notion</p>
-                                      <p className="text-[10px] font-bold text-slate-600 leading-tight italic line-clamp-3">"{selectedRegistryItem.seoInfo.productNotion || 'N/A'}"</p>
+                                      <p className="text-[10px] font-bold text-slate-600 leading-tight italic line-clamp-3">"{selectedRegistryItem.seoInfo?.productNotion || 'N/A'}"</p>
                                     </div>
                                     <div className="space-y-1">
                                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Metadata Tags</p>
                                       <div className="flex flex-wrap gap-1">
-                                        {(selectedRegistryItem.seoInfo.keywords || []).slice(0, 20).map((buzz, i) => (
+                                        {(selectedRegistryItem.seoInfo?.keywords || []).slice(0, 20).map((buzz, i) => (
                                           <span key={i} className="px-1.5 py-0.5 bg-white border border-stone-200 text-[7px] font-black text-amber-700 rounded uppercase shadow-sm">#{buzz}</span>
                                         ))}
                                       </div>
@@ -1370,6 +1424,61 @@ PHASE 4: STRATEGIC SEO (PRECISION MODE)
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+        {activeTab === 'system' && (
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-8 lg:p-10 space-y-10 animate-in zoom-in-95 duration-500 pb-20">
+            <div className="space-y-2">
+              <h2 className="text-4xl font-black text-slate-950 tracking-tighter uppercase">System Protocol</h2>
+              <p className="text-slate-500 font-bold">Manage data persistence and recovery nodes.</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Backup Card */}
+              <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4">
+                 <div className="w-12 h-12 bg-emerald-50 text-emerald-700 rounded-xl flex items-center justify-center border border-emerald-100 shadow-inner">
+                   <Archive size={24} />
+                 </div>
+                 <div className="space-y-1">
+                   <h3 className="text-lg font-black text-slate-950 uppercase tracking-tight">Create Restore Point</h3>
+                   <p className="text-xs font-medium text-slate-500">Generate a full JSON snapshot of the current registry and user configuration.</p>
+                 </div>
+                 <button onClick={handleCreateBackup} className="w-full py-3 bg-slate-950 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-colors shadow-lg flex items-center justify-center gap-2">
+                   <Download size={14} /> Backup System
+                 </button>
+              </div>
+
+              {/* Restore Card */}
+              <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4 relative overflow-hidden">
+                 <div className="w-12 h-12 bg-amber-50 text-amber-700 rounded-xl flex items-center justify-center border border-amber-100 shadow-inner">
+                   <RefreshCw size={24} />
+                 </div>
+                 <div className="space-y-1">
+                   <h3 className="text-lg font-black text-slate-950 uppercase tracking-tight">Restore Configuration</h3>
+                   <p className="text-xs font-medium text-slate-500">Revert system state from a previously saved checkpoint file.</p>
+                 </div>
+                 <div className="relative">
+                    <button className="w-full py-3 bg-white border border-stone-200 text-slate-950 rounded-xl font-black text-xs uppercase tracking-widest hover:border-amber-500 hover:text-amber-700 transition-colors shadow-sm flex items-center justify-center gap-2">
+                      <Upload size={14} /> Select Checkpoint
+                    </button>
+                    <input type="file" accept=".json" onChange={handleRestoreBackup} className="absolute inset-0 opacity-0 cursor-pointer" />
+                 </div>
+              </div>
+
+              {/* Reset Card */}
+              <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm space-y-4 group">
+                 <div className="w-12 h-12 bg-red-50 text-red-700 rounded-xl flex items-center justify-center border border-red-100 shadow-inner group-hover:bg-red-600 group-hover:text-white transition-colors">
+                   <Trash2 size={24} />
+                 </div>
+                 <div className="space-y-1">
+                   <h3 className="text-lg font-black text-slate-950 uppercase tracking-tight">Factory Reset</h3>
+                   <p className="text-xs font-medium text-slate-500">Purge all local registry data and session tokens. Irreversible.</p>
+                 </div>
+                 <button onClick={handleFactoryReset} className="w-full py-3 bg-red-50 text-red-700 border border-red-100 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors shadow-sm flex items-center justify-center gap-2">
+                   <AlertCircle size={14} /> Purge Data
+                 </button>
+              </div>
             </div>
           </div>
         )}
